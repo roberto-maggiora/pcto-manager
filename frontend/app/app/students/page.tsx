@@ -231,7 +231,7 @@ export default function StudentsPage() {
                     Salvataggio
                   </span>
                 ) : (
-                Salva
+                  "Salva"
                 )}
               </Button>
             </div>

@@ -76,7 +76,7 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
       toast({ title: "Sessione creata" });
     },
     onError: () => {
-      toast({ title: "Errore creazione sessione", variant: "destructive" });
+      toast({ title: "Errore creazione sessione", variant: "error" });
     }
   });
 

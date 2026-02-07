@@ -137,7 +137,7 @@ export default function ClassesPage() {
                     Salvataggio
                   </span>
                 ) : (
-                Salva
+                  "Salva"
                 )}
               </Button>
             </div>
