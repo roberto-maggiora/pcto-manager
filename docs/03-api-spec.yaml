@@ -1,0 +1,24 @@
+routes:
+
+  - GET /catalog/templates
+  - GET /catalog/providers
+
+  - POST /projects
+  - GET /projects/{id}
+  - GET /projects
+
+  - POST /projects/{id}/sessions
+  - POST /sessions/{id}/attendance
+
+  - POST /attendance/{id}/approve/provider
+  - POST /attendance/{id}/approve/school
+
+  - POST /documents/upload-url
+  - POST /documents
+
+  - POST /exports/projects/{id}
+  - GET /exports/{id}/download
+
+  - GET /school
+  - PATCH /school
+  - PATCH /school/branding

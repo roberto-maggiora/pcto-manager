@@ -1,0 +1,66 @@
+entities:
+
+  School:
+    fields:
+      id: uuid
+      name: string
+      legal_name: string?
+      address: string
+      city: string
+      province: string
+      email: string
+      phone: string
+      logo_file_id: uuid?
+
+  User:
+    fields:
+      id: uuid
+      school_id: uuid?
+      role: enum[platform_admin, school_admin, tutor_school, tutor_provider, student]
+      email: string
+      password_hash: string
+
+  Student:
+    fields:
+      id: uuid
+      school_id: uuid
+      class_id: uuid
+      first_name: string
+      last_name: string
+
+  Project:
+    fields:
+      id: uuid
+      school_id: uuid
+      template_id: uuid?
+      provider_id: uuid?
+      title: string
+      status: enum[draft, active, closed]
+      start_date: date
+      end_date: date
+
+  Session:
+    fields:
+      id: uuid
+      project_id: uuid
+      start: datetime
+      end: datetime
+      planned_hours: float
+
+  Attendance:
+    fields:
+      id: uuid
+      session_id: uuid
+      student_id: uuid
+      status: enum[present, absent]
+      hours: float
+      approved_by_provider: bool
+      approved_by_school: bool
+
+  Document:
+    fields:
+      id: uuid
+      school_id: uuid
+      owner_type: enum[project, student]
+      owner_id: uuid
+      file_id: uuid

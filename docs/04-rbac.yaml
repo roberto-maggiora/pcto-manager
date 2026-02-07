@@ -1,0 +1,21 @@
+permissions:
+
+  platform_admin:
+    - "*"
+
+  school_admin:
+    - manage_projects
+    - manage_students
+    - export_documents
+    - manage_branding
+
+  tutor_school:
+    - approve_attendance
+    - view_projects
+
+  tutor_provider:
+    - approve_attendance
+    - view_projects
+
+  student:
+    - view_own_attendance
