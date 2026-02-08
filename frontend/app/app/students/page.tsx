@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowUpDown, MoreHorizontal } from "lucide-react";
+import { ArrowUpDown, MoreHorizontal, UserRound } from "lucide-react";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTableToolbar } from "@/components/data-table/data-table-toolbar";
-import { EmptyState } from "@/components/data-table/empty-state";
+import { EmptyState as FriendlyEmptyState } from "@/components/empty-state";
 import { useTableDensity } from "@/components/data-table/use-table-density";
 import type { DataTableColumnDef } from "@/components/data-table/columns";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { PageHeader } from "@/components/page-header";
+import { SectionContainer } from "@/components/section-container";
 import { api } from "@/lib/api";
 
 export default function StudentsPage() {
@@ -320,7 +321,7 @@ export default function StudentsPage() {
   }, [classOptions, metricsByStudent, metricsQuery.isLoading]);
 
   return (
-    <div className="space-y-8">
+    <SectionContainer section="students" className="space-y-8">
       <PageHeader title="Studenti" description="Anagrafiche studenti" />
       <DataTable
         columns={columns}
@@ -376,11 +377,12 @@ export default function StudentsPage() {
           />
         )}
         emptyState={
-          <EmptyState
-            title="Nessuno studente"
-            description="Aggiungi il primo studente per iniziare."
+          <FriendlyEmptyState
+            title="Nessuno studente presente"
+            description="Crea uno studente oppure importali (in futuro)."
             actionLabel="Aggiungi studente"
             onAction={() => setOpen(true)}
+            icon={UserRound}
           />
         }
       />
@@ -577,6 +579,6 @@ export default function StudentsPage() {
           </Card>
         </div>
       ) : null}
-    </div>
+    </SectionContainer>
   );
 }

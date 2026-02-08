@@ -7,7 +7,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTableToolbar } from "@/components/data-table/data-table-toolbar";
-import { EmptyState } from "@/components/data-table/empty-state";
 import { useTableDensity } from "@/components/data-table/use-table-density";
 import type { DataTableColumnDef } from "@/components/data-table/columns";
 import { Button } from "@/components/ui/button";
@@ -21,6 +20,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/toast";
 import { PageHeader } from "@/components/page-header";
+import { SectionContainer } from "@/components/section-container";
+import { EmptyState as FriendlyEmptyState } from "@/components/empty-state";
+import { Users } from "lucide-react";
 import { api } from "@/lib/api";
 
 export default function ClassesPage() {
@@ -235,7 +237,7 @@ export default function ClassesPage() {
   }, [router, studentsByClass, studentsQuery.isLoading]);
 
   return (
-    <div className="space-y-8">
+    <SectionContainer section="classes" className="space-y-8">
       <PageHeader title="Classi" description="Gestisci classi e studenti" />
       <DataTable
         columns={columns}
@@ -297,11 +299,12 @@ export default function ClassesPage() {
           />
         )}
         emptyState={
-          <EmptyState
-            title="Nessuna classe"
-            description="Crea la prima classe per iniziare."
+          <FriendlyEmptyState
+            title="Nessuna classe creata"
+            description="Aggiungi una classe per iniziare a registrare studenti e presenze."
             actionLabel="Crea classe"
             onAction={() => setOpen(true)}
+            icon={Users}
           />
         }
       />
@@ -443,6 +446,6 @@ export default function ClassesPage() {
           </Card>
         </div>
       ) : null}
-    </div>
+    </SectionContainer>
   );
 }

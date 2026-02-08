@@ -141,12 +141,15 @@ export function DataTable<TData>({
                       density === "compact" ? "text-sm" : ""
                     )}
                   >
-                    {row.getVisibleCells().map((cell) => (
+                    {row.getVisibleCells().map((cell, index) => (
                       <Td
                         key={cell.id}
                         className={cn(
                           "px-4",
-                          density === "compact" ? "py-2" : "py-3"
+                          density === "compact" ? "py-2" : "py-3",
+                          index === 0
+                            ? "relative before:absolute before:left-0 before:top-1/2 before:h-4 before:w-[3px] before:-translate-y-1/2 before:rounded-full before:bg-transparent group-hover:before:bg-[var(--section-accent,var(--primary))]"
+                            : ""
                         )}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}

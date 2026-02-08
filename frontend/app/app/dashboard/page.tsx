@@ -16,6 +16,9 @@ import {
 import { Card } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/skeletons";
 import { PageHeader } from "@/components/page-header";
+import { SectionContainer } from "@/components/section-container";
+import { EmptyState } from "@/components/empty-state";
+import { Activity, BarChart3 } from "lucide-react";
 import { api } from "@/lib/api";
 import { getActivities } from "@/lib/activity";
 import { formatDate } from "@/lib/format";
@@ -138,7 +141,7 @@ export default function DashboardPage() {
   const activities = useMemo(() => getActivities().slice(0, 5), []);
 
   return (
-    <div className="space-y-8">
+    <SectionContainer section="dashboard" className="space-y-8">
       <PageHeader title="Dashboard" description="Panoramica attività PCTO" />
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -190,13 +193,26 @@ export default function DashboardPage() {
           </div>
           {loading ? (
             <div className="h-56 animate-pulse rounded-md bg-slate-100/80" />
+          ) : lineData.every((row) => row.hours === 0) ? (
+            <EmptyState
+              title="Nessun dato da mostrare"
+              description="Registra una prima sessione per vedere l’andamento."
+              icon={Activity}
+            />
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={lineData}>
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip />
-                <Line type="monotone" dataKey="hours" stroke="#0f172a" strokeWidth={2} />
+                <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: 12,
+                    borderColor: "var(--border)",
+                    boxShadow: "var(--shadow-sm)"
+                  }}
+                  labelStyle={{ color: "var(--muted)" }}
+                />
+                <Line type="monotone" dataKey="hours" stroke="#2563eb" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -205,13 +221,26 @@ export default function DashboardPage() {
           <div className="mb-2 text-sm font-semibold text-slate-700">Ore per classe</div>
           {loading ? (
             <div className="h-56 animate-pulse rounded-md bg-slate-100/80" />
+          ) : barData.length === 0 ? (
+            <EmptyState
+              title="Nessun dato da mostrare"
+              description="Registra presenze per popolare il grafico."
+              icon={BarChart3}
+            />
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={barData}>
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip />
-                <Bar dataKey="hours" fill="#1e293b" />
+                <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: 12,
+                    borderColor: "var(--border)",
+                    boxShadow: "var(--shadow-sm)"
+                  }}
+                  labelStyle={{ color: "var(--muted)" }}
+                />
+                <Bar dataKey="hours" fill="#2563eb" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -221,7 +250,11 @@ export default function DashboardPage() {
       <Card>
         <div className="text-sm font-semibold text-slate-700">Attività recenti</div>
         {activities.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-500">Nessuna attività recente.</p>
+          <EmptyState
+            title="Nessuna attività recente"
+            description="Le azioni appariranno qui man mano che lavori."
+            icon={Activity}
+          />
         ) : (
           <ul className="mt-2 divide-y divide-slate-100 text-sm">
             {activities.map((item) => (
@@ -235,6 +268,6 @@ export default function DashboardPage() {
           </ul>
         )}
       </Card>
-    </div>
+    </SectionContainer>
   );
 }

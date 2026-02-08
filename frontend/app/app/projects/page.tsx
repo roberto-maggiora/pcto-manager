@@ -3,13 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { ArrowUpDown, MoreHorizontal } from "lucide-react";
+import { ArrowUpDown, MoreHorizontal, Sparkles } from "lucide-react";
 
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTableToolbar } from "@/components/data-table/data-table-toolbar";
-import { EmptyState } from "@/components/data-table/empty-state";
+import { EmptyState as FriendlyEmptyState } from "@/components/empty-state";
 import type { DataTableColumnDef } from "@/components/data-table/columns";
 import { Badge } from "@/components/ui/badge";
+import { StatusChip } from "@/components/status-chip";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -21,7 +22,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { PageHeader } from "@/components/page-header";
+import { SectionContainer } from "@/components/section-container";
 import { api } from "@/lib/api";
+import { getProgressChip, getProjectStatusChip } from "@/lib/badges";
 import { formatDate } from "@/lib/format";
 import { computeProjectProgress } from "@/lib/progress";
 
@@ -259,8 +262,8 @@ export default function ProjectsPage() {
           </button>
         ),
         cell: ({ row }) => {
-          const status = statusLabel[row.original.status] ?? statusLabel.draft;
-          return <Badge variant={status.variant}>{status.label}</Badge>;
+          const status = getProjectStatusChip(row.original.status);
+          return <StatusChip label={status.label} tone={status.tone} withDot />;
         },
         meta: { label: "Stato" }
       },
@@ -350,18 +353,19 @@ export default function ProjectsPage() {
               attendanceForProject[sessionItem.id] = attendanceBySession[sessionItem.id] ?? [];
             }
           });
-          const { progressPct, label, badgeVariant } = computeProjectProgress(
+          const { progressPct, label } = computeProjectProgress(
             row.original,
             sessions,
             attendanceForProject
           );
+          const progressChip = getProgressChip(label);
           const isLoadingSessions = sessionsLoadingByProject.get(row.original.id);
           return isLoadingSessions ? (
             "…"
           ) : (
             <div className="flex items-center gap-2">
               <span className="text-sm text-slate-600">{progressPct}%</span>
-              <Badge variant={badgeVariant}>{label}</Badge>
+              <StatusChip label={progressChip.label} tone={progressChip.tone} withDot />
             </div>
           );
         },
@@ -417,7 +421,7 @@ export default function ProjectsPage() {
   }, [attendanceBySession, router, sessionsByProject, sessionsLoadingByProject, toast]);
 
   return (
-    <div className="space-y-8">
+    <SectionContainer section="projects" className="space-y-8">
       <PageHeader title="Progetti PCTO" description="Lista progetti" />
       <DataTable
         columns={columns}
@@ -468,11 +472,12 @@ export default function ProjectsPage() {
           />
         )}
         emptyState={
-          <EmptyState
-            title="Nessun progetto"
-            description="Crea il primo progetto PCTO per iniziare."
+          <FriendlyEmptyState
+            title="Ancora nessun progetto PCTO"
+            description="Crea il primo progetto oppure attiva un percorso preconfezionato."
             actionLabel="Crea progetto"
             onAction={() => router.push("/app/projects/new")}
+            icon={Sparkles}
           />
         }
       />
@@ -604,6 +609,6 @@ export default function ProjectsPage() {
           </Card>
         </div>
       ) : null}
-    </div>
+    </SectionContainer>
   );
 }

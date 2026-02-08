@@ -3,17 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Badge } from "@/components/ui/badge";
+import { StatusChip } from "@/components/status-chip";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, Td, Th } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { PageHeader } from "@/components/page-header";
+import { SectionContainer } from "@/components/section-container";
 import { addActivity } from "@/lib/activity";
 import { api } from "@/lib/api";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { computeProjectProgress } from "@/lib/progress";
+import { getProgressChip, getProjectStatusChip, getSessionStatusChip } from "@/lib/badges";
 
 type TabKey = "overview" | "sessions" | "attendance" | "exports";
 type InlineSessionRow = {
@@ -29,14 +31,6 @@ const statusLabel: Record<string, { label: string; variant: "draft" | "active" |
   draft: { label: "Bozza", variant: "draft" },
   active: { label: "Attivo", variant: "active" },
   closed: { label: "Chiuso", variant: "closed" }
-};
-
-const sessionStatusLabel: Record<
-  "scheduled" | "done",
-  { label: string; variant: "scheduled" | "done" }
-> = {
-  scheduled: { label: "Programmata", variant: "scheduled" },
-  done: { label: "Svolta", variant: "done" }
 };
 
 const toLocalInput = (value?: string | null) =>
@@ -385,7 +379,7 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
     });
   }, [studentsQuery.data, selectedSessionId]);
 
-  const projectStatus = statusLabel[projectQuery.data?.status ?? "draft"];
+  const projectStatus = getProjectStatusChip(projectQuery.data?.status ?? "draft");
   const selectedSession = useMemo(
     () => (sessionsQuery.data ?? []).find((item) => item.id === selectedSessionId),
     [selectedSessionId, sessionsQuery.data]
@@ -411,12 +405,13 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
     return map;
   }, [doneAttendanceQueries, doneSessions]);
 
-  const { usedHours, progressPct, label: progressLabel, badgeVariant: progressVariant } =
+  const { usedHours, progressPct, label: progressLabel } =
     computeProjectProgress(
     projectQuery.data ?? {},
     sessionsQuery.data ?? [],
     attendanceByDoneSession
   );
+  const progressChip = getProgressChip(progressLabel);
 
   const formatHours = (value: number) =>
     Number.isInteger(value) ? `${value}` : value.toFixed(1);
@@ -471,7 +466,7 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
   };
 
   return (
-    <div className="space-y-8">
+    <SectionContainer section="projects" className="space-y-8">
       <PageHeader
         title={projectQuery.data?.title ?? "Progetto"}
         description={`${formatDate(projectQuery.data?.start_date)} - ${formatDate(
@@ -479,7 +474,7 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
         )}`}
         actions={
           <>
-            <Badge variant={projectStatus.variant}>{projectStatus.label}</Badge>
+            <StatusChip label={projectStatus.label} tone={projectStatus.tone} withDot />
             <Button onClick={() => setSessionModalOpen(true)} disabled={createSession.isPending}>
               {createSession.isPending ? (
                 <span className="flex items-center gap-2">
@@ -562,7 +557,11 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
                 </div>
                 <div>
                   <p className="text-sm text-slate-500">Stato</p>
-                  <Badge variant={progressVariant}>{progressLabel}</Badge>
+                  <StatusChip
+                    label={progressChip.label}
+                    tone={progressChip.tone}
+                    withDot
+                  />
                 </div>
               </div>
               <div className="mt-3 h-2 w-full rounded-full bg-slate-100">
@@ -809,9 +808,10 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
                     <Td>{item.planned_hours}</Td>
                     <Td>{item.topic ?? "—"}</Td>
                     <Td>
-                      <Badge variant={sessionStatusLabel[item.status].variant}>
-                        {sessionStatusLabel[item.status].label}
-                      </Badge>
+                      {(() => {
+                        const chip = getSessionStatusChip(item.status);
+                        return <StatusChip label={chip.label} tone={chip.tone} withDot />;
+                      })()}
                     </Td>
                     <Td>
                       <div className="flex flex-wrap gap-2">
@@ -842,7 +842,7 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
               </tbody>
             </Table>
           )}
-        </Card>
+      </Card>
       ) : null}
 
       {tab === "attendance" ? (
@@ -1264,6 +1264,6 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
           </Card>
         </div>
       ) : null}
-    </div>
+    </SectionContainer>
   );
 }

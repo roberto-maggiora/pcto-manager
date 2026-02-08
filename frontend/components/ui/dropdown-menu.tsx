@@ -21,7 +21,7 @@ export const DropdownMenuContent = forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 min-w-[180px] rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg",
+        "z-50 min-w-[180px] origin-top-right rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg motion-safe:animate-[menu-in_120ms_ease-out]",
         className
       )}
       {...props}

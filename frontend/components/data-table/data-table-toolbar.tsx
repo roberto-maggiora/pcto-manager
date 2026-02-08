@@ -90,12 +90,28 @@ export function DataTableToolbar<TData>({
           </DropdownMenuContent>
         </DropdownMenu>
         {showDensityToggle && density && onDensityChange ? (
-          <Button
-            variant="secondary"
-            onClick={() => onDensityChange(density === "compact" ? "normal" : "compact")}
-          >
-            {density === "compact" ? "Normale" : "Compatta"}
-          </Button>
+          <div className="flex items-center rounded-full border border-slate-200/70 bg-white p-1">
+            <button
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                density === "normal"
+                  ? "bg-[var(--primarySoft)] text-[var(--primary)]"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+              onClick={() => onDensityChange("normal")}
+            >
+              Normale
+            </button>
+            <button
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                density === "compact"
+                  ? "bg-[var(--primarySoft)] text-[var(--primary)]"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+              onClick={() => onDensityChange("compact")}
+            >
+              Compatta
+            </button>
+          </div>
         ) : null}
         {action}
       </div>

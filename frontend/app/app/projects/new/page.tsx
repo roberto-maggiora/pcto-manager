@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 
 import { PageHeader } from "@/components/page-header";
+import { SectionContainer } from "@/components/section-container";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -43,7 +44,7 @@ export default function NewProjectPage() {
   });
 
   return (
-    <div className="space-y-8">
+    <SectionContainer section="projects" className="space-y-8">
       <PageHeader title="Nuovo progetto" description="Crea un progetto PCTO" />
       <Card className="space-y-4">
         <div>
@@ -158,6 +159,6 @@ export default function NewProjectPage() {
           )}
         </Button>
       </Card>
-    </div>
+    </SectionContainer>
   );
 }
