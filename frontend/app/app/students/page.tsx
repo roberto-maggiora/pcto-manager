@@ -2,18 +2,32 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowUpDown, MoreHorizontal } from "lucide-react";
 
+import { DataTable } from "@/components/data-table/data-table";
+import { DataTableToolbar } from "@/components/data-table/data-table-toolbar";
+import { EmptyState } from "@/components/data-table/empty-state";
+import { useTableDensity } from "@/components/data-table/use-table-density";
+import type { DataTableColumnDef } from "@/components/data-table/columns";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Table, Td, Th } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+import { PageHeader } from "@/components/page-header";
 import { api } from "@/lib/api";
 
 export default function StudentsPage() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const { density, setDensity } = useTableDensity("students-table-density");
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -22,7 +36,6 @@ export default function StudentsPage() {
   const [lastName, setLastName] = useState("");
   const [requiredHours, setRequiredHours] = useState("150");
   const [filterClassId, setFilterClassId] = useState("");
-  const [search, setSearch] = useState("");
   const [editId, setEditId] = useState("");
   const [editClassId, setEditClassId] = useState("");
   const [editFirstName, setEditFirstName] = useState("");
@@ -127,138 +140,250 @@ export default function StudentsPage() {
     return map;
   }, [metricsQuery.data]);
 
-  const filteredStudents = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) {
-      return studentsQuery.data ?? [];
-    }
-    return (studentsQuery.data ?? []).filter((student) => {
-      const full = `${student.first_name} ${student.last_name}`.toLowerCase();
-      const fullReverse = `${student.last_name} ${student.first_name}`.toLowerCase();
-      return (
-        full.includes(query) ||
-        fullReverse.includes(query) ||
-        student.first_name.toLowerCase().includes(query) ||
-        student.last_name.toLowerCase().includes(query)
-      );
-    });
-  }, [search, studentsQuery.data]);
+  const filteredStudents = useMemo(() => studentsQuery.data ?? [], [studentsQuery.data]);
 
   const formatHours = (value: number) =>
     Number.isInteger(value) ? `${value}` : value.toFixed(1);
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Studenti</h1>
-          <p className="text-slate-600">Anagrafiche studenti</p>
-        </div>
-        <Button onClick={() => setOpen(true)}>Crea studente</Button>
-      </div>
-      <div className="flex gap-3">
-        <Input
-          placeholder="Cerca studente"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        <select
-          className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-          value={filterClassId}
-          onChange={(event) => setFilterClassId(event.target.value)}
-        >
-          <option value="">Tutte le classi</option>
-          {classOptions.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.year}
-              {item.section}
-            </option>
-          ))}
-        </select>
-      </div>
-      <Card>
-        {studentsQuery.isLoading ? (
-          <p className="p-4 text-sm text-slate-500">Caricamento...</p>
-        ) : (
-          <>
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Cognome</Th>
-                  <Th>Nome</Th>
-                  <Th>Classe</Th>
-                  <Th>Ore svolte</Th>
-                  <Th>Ore richieste</Th>
-                  <Th>Ore mancanti</Th>
-                  <Th>Azioni</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStudents.map((student) => {
-                  const cls = classOptions.find((item) => item.id === student.class_id);
-                  const completedHours = metricsByStudent.get(student.id) ?? 0;
-                  const required = student.pcto_required_hours ?? 150;
-                  const remaining = Math.max(0, required - completedHours);
-                  return (
-                    <tr
-                      key={student.id}
-                      className="cursor-pointer"
-                      onClick={() => {
-                        window.location.href = `/app/students/${student.id}`;
-                      }}
-                    >
-                      <Td>{student.last_name}</Td>
-                      <Td>{student.first_name}</Td>
-                      <Td>{cls ? `${cls.year}${cls.section}` : "-"}</Td>
-                      <Td>{metricsQuery.isLoading ? "…" : formatHours(completedHours)}</Td>
-                      <Td>{formatHours(required)}</Td>
-                      <Td>{formatHours(remaining)}</Td>
-                      <Td>
-                        <div className="flex gap-2">
-                          <button
-                            className="text-sm text-slate-600 underline"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setEditId(student.id);
-                              setEditFirstName(student.first_name);
-                              setEditLastName(student.last_name);
-                              setEditClassId(student.class_id);
-                              setEditRequiredHours(String(required));
-                              setEditOpen(true);
-                            }}
-                          >
-                            Modifica
-                          </button>
-                          <button
-                            className="text-sm text-rose-600 underline"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setDeleteId(student.id);
-                            }}
-                          >
-                            Elimina
-                          </button>
-                        </div>
-                      </Td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </Table>
-            {!filteredStudents.length ? (
-              <div className="p-4 text-sm text-slate-500">
-                Nessuno studente.{" "}
+  type StudentRow = {
+    id: string;
+    first_name: string;
+    last_name: string;
+    class_id: string;
+    pcto_required_hours: number;
+  };
+
+  const columns = useMemo<DataTableColumnDef<StudentRow>[]>(() => {
+    return [
+      {
+        accessorKey: "last_name",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            Cognome
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        meta: { label: "Cognome" }
+      },
+      {
+        accessorKey: "first_name",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            Nome
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        meta: { label: "Nome" }
+      },
+      {
+        id: "class",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            Classe
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        accessorFn: (row) => {
+          const cls = classOptions.find((item) => item.id === row.class_id);
+          return cls ? `${cls.year}${cls.section}` : "-";
+        },
+        cell: ({ row }) => {
+          const cls = classOptions.find((item) => item.id === row.original.class_id);
+          return cls ? `${cls.year}${cls.section}` : "-";
+        },
+        meta: { label: "Classe" }
+      },
+      {
+        id: "active_projects",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            Progetti PCTO attivi
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        accessorFn: () => 0,
+        cell: () => "—",
+        meta: { label: "Progetti PCTO attivi" }
+      },
+      {
+        id: "completed_hours",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            Ore svolte
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        accessorFn: (row) => metricsByStudent.get(row.id) ?? 0,
+        cell: ({ row }) =>
+          metricsQuery.isLoading
+            ? "…"
+            : formatHours(metricsByStudent.get(row.original.id) ?? 0),
+        meta: { label: "Ore svolte" }
+      },
+      {
+        id: "required_hours",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            Ore richieste
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        accessorFn: (row) => row.pcto_required_hours ?? 150,
+        cell: ({ row }) => formatHours(row.original.pcto_required_hours ?? 150),
+        meta: { label: "Ore richieste" }
+      },
+      {
+        id: "remaining_hours",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            Ore mancanti
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        accessorFn: (row) => {
+          const completed = metricsByStudent.get(row.id) ?? 0;
+          const required = row.pcto_required_hours ?? 150;
+          return Math.max(0, required - completed);
+        },
+        cell: ({ row }) => {
+          const completed = metricsByStudent.get(row.original.id) ?? 0;
+          const required = row.original.pcto_required_hours ?? 150;
+          return formatHours(Math.max(0, required - completed));
+        },
+        meta: { label: "Ore mancanti" }
+      },
+      {
+        id: "actions",
+        enableHiding: false,
+        header: "Azioni",
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <button
-                  className="text-slate-900 underline"
-                  onClick={() => setOpen(true)}
+                  className="rounded-md p-1 text-slate-500 opacity-0 transition-opacity hover:bg-slate-100 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+                  onClick={(event) => event.stopPropagation()}
                 >
-                  Crea studente
+                  <MoreHorizontal className="h-4 w-4" />
                 </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+                <DropdownMenuItem
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    setEditId(row.original.id);
+                    setEditFirstName(row.original.first_name);
+                    setEditLastName(row.original.last_name);
+                    setEditClassId(row.original.class_id);
+                    setEditRequiredHours(String(row.original.pcto_required_hours ?? 150));
+                    setEditOpen(true);
+                  }}
+                >
+                  Modifica
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    setDeleteId(row.original.id);
+                  }}
+                >
+                  Elimina
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ),
+        meta: { label: "Azioni" }
+      }
+    ];
+  }, [classOptions, metricsByStudent, metricsQuery.isLoading]);
+
+  return (
+    <div className="space-y-8">
+      <PageHeader title="Studenti" description="Anagrafiche studenti" />
+      <DataTable
+        columns={columns}
+        data={filteredStudents}
+        loading={studentsQuery.isLoading}
+        density={density}
+        setDensity={setDensity}
+        onRowClick={(row) => router.push(`/app/students/${row.id}`)}
+        globalFilterFn={(row, filterValue) => {
+          const query = filterValue.trim().toLowerCase();
+          if (!query) {
+            return true;
+          }
+          const full = `${row.first_name} ${row.last_name}`.toLowerCase();
+          const fullReverse = `${row.last_name} ${row.first_name}`.toLowerCase();
+          return (
+            full.includes(query) ||
+            fullReverse.includes(query) ||
+            row.first_name.toLowerCase().includes(query) ||
+            row.last_name.toLowerCase().includes(query)
+          );
+        }}
+        toolbar={({ table, globalFilter, setGlobalFilter, resultCount, density, setDensity }) => (
+          <DataTableToolbar
+            table={table}
+            globalFilter={globalFilter}
+            onGlobalFilterChange={setGlobalFilter}
+            resultCount={resultCount}
+            showDensityToggle
+            density={density}
+            onDensityChange={setDensity}
+            action={<Button onClick={() => setOpen(true)}>Aggiungi studente</Button>}
+            filters={
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Classe</label>
+                  <select
+                    className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                    value={filterClassId}
+                    onChange={(event) => setFilterClassId(event.target.value)}
+                  >
+                    <option value="">Tutte</option>
+                    {classOptions.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.year}
+                        {item.section}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            ) : null}
-          </>
+            }
+          />
         )}
-      </Card>
+        emptyState={
+          <EmptyState
+            title="Nessuno studente"
+            description="Aggiungi il primo studente per iniziare."
+            actionLabel="Aggiungi studente"
+            onAction={() => setOpen(true)}
+          />
+        }
+      />
 
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">

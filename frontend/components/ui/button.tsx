@@ -12,10 +12,10 @@ export function Button({ className, variant = "default", ...props }: ButtonProps
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition",
+        "inline-flex items-center justify-center rounded-[var(--radius)] px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-[color:var(--primary)]/30",
         variant === "default"
-          ? "bg-slate-900 text-white hover:bg-slate-800"
-          : "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50",
+          ? "bg-[var(--primary)] text-white shadow-sm hover:shadow-md hover:brightness-95"
+          : "bg-white text-slate-900 border border-slate-200/70 hover:bg-slate-50",
         className
       )}
       {...props}

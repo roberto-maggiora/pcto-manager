@@ -39,10 +39,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         {items.map((item) => (
           <div
             key={item.id}
-            className={`rounded-md border px-4 py-3 text-sm shadow ${
+            className={`rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur transition ${
               item.variant === "error"
-                ? "border-red-200 bg-red-50 text-red-800"
-                : "border-emerald-200 bg-emerald-50 text-emerald-900"
+                ? "border-red-200/70 bg-red-50/90 text-red-800"
+                : "border-emerald-200/70 bg-emerald-50/90 text-emerald-900"
             }`}
           >
             {item.title}

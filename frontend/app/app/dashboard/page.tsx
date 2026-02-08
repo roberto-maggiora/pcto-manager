@@ -14,6 +14,8 @@ import {
 } from "recharts";
 
 import { Card } from "@/components/ui/card";
+import { CardSkeleton } from "@/components/skeletons";
+import { PageHeader } from "@/components/page-header";
 import { api } from "@/lib/api";
 import { getActivities } from "@/lib/activity";
 import { formatDate } from "@/lib/format";
@@ -136,49 +138,58 @@ export default function DashboardPage() {
   const activities = useMemo(() => getActivities().slice(0, 5), []);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="text-slate-600">Panoramica attività PCTO</p>
-      </div>
+    <div className="space-y-8">
+      <PageHeader title="Dashboard" description="Panoramica attività PCTO" />
 
       <div className="grid gap-4 md:grid-cols-4">
         {loading ? (
           <>
-            <Card className="h-24 animate-pulse bg-slate-100" />
-            <Card className="h-24 animate-pulse bg-slate-100" />
-            <Card className="h-24 animate-pulse bg-slate-100" />
-            <Card className="h-24 animate-pulse bg-slate-100" />
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
           </>
         ) : (
           <>
-            <Card className="space-y-1 shadow-sm">
-              <div className="text-sm text-slate-500"># Progetti</div>
-              <div className="text-2xl font-semibold">{kpis.totalProjects}</div>
-            </Card>
-            <Card className="space-y-1 shadow-sm">
-              <div className="text-sm text-slate-500"># Sessioni</div>
-              <div className="text-2xl font-semibold">{kpis.totalSessions}</div>
-            </Card>
-            <Card className="space-y-1 shadow-sm">
-              <div className="text-sm text-slate-500">Ore totali registrate</div>
-              <div className="text-2xl font-semibold">
-                {formatHours(kpis.totalHours)}
+            <Card className="space-y-1 border-l-4 border-l-[var(--primary)]/60">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                # Progetti
               </div>
+              <div className="text-3xl font-semibold">{kpis.totalProjects}</div>
+              <div className="text-xs text-slate-500">Ultimi 30 giorni</div>
             </Card>
-            <Card className="space-y-1 shadow-sm">
-              <div className="text-sm text-slate-500">% Presenza media</div>
-              <div className="text-2xl font-semibold">{kpis.presenceAvg}%</div>
+            <Card className="space-y-1 border-l-4 border-l-[var(--primary)]/60">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                # Sessioni
+              </div>
+              <div className="text-3xl font-semibold">{kpis.totalSessions}</div>
+              <div className="text-xs text-slate-500">Ultimi 30 giorni</div>
+            </Card>
+            <Card className="space-y-1 border-l-4 border-l-[var(--primary)]/60">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Ore totali registrate
+              </div>
+              <div className="text-3xl font-semibold">{formatHours(kpis.totalHours)}</div>
+              <div className="text-xs text-slate-500">Ultimi 30 giorni</div>
+            </Card>
+            <Card className="space-y-1 border-l-4 border-l-[var(--primary)]/60">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                % Presenza media
+              </div>
+              <div className="text-3xl font-semibold">{kpis.presenceAvg}%</div>
+              <div className="text-xs text-slate-500">Ultimi 30 giorni</div>
             </Card>
           </>
         )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="h-72 shadow-sm">
-          <div className="mb-2 text-sm text-slate-500">Ore registrate nel tempo</div>
+        <Card className="h-72">
+          <div className="mb-2 text-sm font-semibold text-slate-700">
+            Ore registrate nel tempo
+          </div>
           {loading ? (
-            <div className="h-56 animate-pulse rounded-md bg-slate-100" />
+            <div className="h-56 animate-pulse rounded-md bg-slate-100/80" />
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={lineData}>
@@ -190,10 +201,10 @@ export default function DashboardPage() {
             </ResponsiveContainer>
           )}
         </Card>
-        <Card className="h-72 shadow-sm">
-          <div className="mb-2 text-sm text-slate-500">Ore per classe</div>
+        <Card className="h-72">
+          <div className="mb-2 text-sm font-semibold text-slate-700">Ore per classe</div>
           {loading ? (
-            <div className="h-56 animate-pulse rounded-md bg-slate-100" />
+            <div className="h-56 animate-pulse rounded-md bg-slate-100/80" />
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={barData}>
@@ -207,14 +218,14 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <Card className="shadow-sm">
-        <div className="text-sm text-slate-500">Attività recenti</div>
+      <Card>
+        <div className="text-sm font-semibold text-slate-700">Attività recenti</div>
         {activities.length === 0 ? (
           <p className="mt-2 text-sm text-slate-500">Nessuna attività recente.</p>
         ) : (
-          <ul className="mt-2 space-y-2 text-sm">
+          <ul className="mt-2 divide-y divide-slate-100 text-sm">
             {activities.map((item) => (
-              <li key={item.id} className="flex items-center justify-between">
+              <li key={item.id} className="flex items-center justify-between py-2">
                 <span>{item.message}</span>
                 <span className="text-xs text-slate-400">
                   {formatDate(item.createdAt)}

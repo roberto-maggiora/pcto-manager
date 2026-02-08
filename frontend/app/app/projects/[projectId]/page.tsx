@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, Td, Th } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+import { PageHeader } from "@/components/page-header";
 import { addActivity } from "@/lib/activity";
 import { api } from "@/lib/api";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -470,60 +471,57 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">
-            {projectQuery.data?.title ?? "Progetto"}
-          </h1>
-          <p className="text-slate-600">
-            {formatDate(projectQuery.data?.start_date)} -{" "}
-            {formatDate(projectQuery.data?.end_date)}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={projectStatus.variant}>{projectStatus.label}</Badge>
-          <Button onClick={() => setSessionModalOpen(true)} disabled={createSession.isPending}>
-            {createSession.isPending ? (
-              <span className="flex items-center gap-2">
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Salvataggio
-              </span>
-            ) : (
-              "Crea sessione"
-            )}
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => exportAttendance.mutate()}
-            disabled={exportAttendance.isPending}
-          >
-            {exportAttendance.isPending ? (
-              <span className="flex items-center gap-2">
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Generazione
-              </span>
-            ) : (
-              "Genera Registro Presenze (PDF)"
-            )}
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={removeProject.isPending}
-            onClick={() => setDeleteProjectOpen(true)}
-            className="text-rose-600"
-          >
-            {removeProject.isPending ? (
-              <span className="flex items-center gap-2">
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-rose-600 border-t-transparent" />
-                Eliminazione
-              </span>
-            ) : (
-              "Elimina progetto"
-            )}
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        title={projectQuery.data?.title ?? "Progetto"}
+        description={`${formatDate(projectQuery.data?.start_date)} - ${formatDate(
+          projectQuery.data?.end_date
+        )}`}
+        actions={
+          <>
+            <Badge variant={projectStatus.variant}>{projectStatus.label}</Badge>
+            <Button onClick={() => setSessionModalOpen(true)} disabled={createSession.isPending}>
+              {createSession.isPending ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Salvataggio
+                </span>
+              ) : (
+                "Crea sessione"
+              )}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => exportAttendance.mutate()}
+              disabled={exportAttendance.isPending}
+            >
+              {exportAttendance.isPending ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Generazione
+                </span>
+              ) : (
+                "Genera Registro Presenze (PDF)"
+              )}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={removeProject.isPending}
+              onClick={() => setDeleteProjectOpen(true)}
+              className="text-rose-600"
+            >
+              {removeProject.isPending ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-rose-600 border-t-transparent" />
+                  Eliminazione
+                </span>
+              ) : (
+                "Elimina progetto"
+              )}
+            </Button>
+          </>
+        }
+      />
 
       <Card className="space-y-4">
         <div className="flex gap-3 text-sm text-slate-600">

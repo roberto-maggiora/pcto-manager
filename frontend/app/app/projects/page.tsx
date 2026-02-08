@@ -1,14 +1,26 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
+import { ArrowUpDown, MoreHorizontal } from "lucide-react";
 
+import { DataTable } from "@/components/data-table/data-table";
+import { DataTableToolbar } from "@/components/data-table/data-table-toolbar";
+import { EmptyState } from "@/components/data-table/empty-state";
+import type { DataTableColumnDef } from "@/components/data-table/columns";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Table, Td, Th } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+import { PageHeader } from "@/components/page-header";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { computeProjectProgress } from "@/lib/progress";
@@ -107,17 +119,16 @@ const activatableProjects = [
 ];
 
 export default function ProjectsPage() {
+  const router = useRouter();
   const [providerModalIndex, setProviderModalIndex] = useState<number | null>(null);
   const [contactModalIndex, setContactModalIndex] = useState<number | null>(null);
   const [contactName, setContactName] = useState("");
   const [contactNotes, setContactNotes] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [periodFilter, setPeriodFilter] = useState("all");
   const projectsQuery = useQuery({
     queryKey: ["projects"],
     queryFn: api.getProjects
-  });
-  const classesQuery = useQuery({
-    queryKey: ["classes"],
-    queryFn: api.getClasses
   });
   const { toast } = useToast();
   useEffect(() => {
@@ -147,14 +158,6 @@ export default function ProjectsPage() {
     return map;
   }, [projectsQuery.data, sessionQueries]);
 
-  const classLabelById = useMemo(() => {
-    const map = new Map<string, string>();
-    (classesQuery.data ?? []).forEach((classItem) => {
-      map.set(classItem.id, `${classItem.year}${classItem.section}`);
-    });
-    return map;
-  }, [classesQuery.data]);
-
   const doneSessionPairs = useMemo(
     () =>
       (projectsQuery.data ?? []).flatMap((project) => {
@@ -182,110 +185,297 @@ export default function ProjectsPage() {
     return map;
   }, [attendanceQueries, doneSessionPairs]);
 
+  const sessionsLoadingByProject = useMemo(() => {
+    const map = new Map<string, boolean>();
+    (projectsQuery.data ?? []).forEach((project, index) => {
+      map.set(project.id, sessionQueries[index]?.isLoading ?? false);
+    });
+    return map;
+  }, [projectsQuery.data, sessionQueries]);
+
   const formatHours = (value: number) =>
     Number.isInteger(value) ? `${value}` : value.toFixed(1);
 
+  const filteredProjects = useMemo(() => {
+    const items = projectsQuery.data ?? [];
+    return items.filter((project) => {
+      if (statusFilter !== "all" && project.status !== statusFilter) {
+        return false;
+      }
+      if (periodFilter === "all") {
+        return true;
+      }
+      const start = new Date(project.start_date);
+      const now = new Date();
+      if (periodFilter === "last-30") {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 30);
+        return start >= cutoff;
+      }
+      if (periodFilter === "this-month") {
+        return start.getFullYear() === now.getFullYear() && start.getMonth() === now.getMonth();
+      }
+      if (periodFilter === "this-year") {
+        return start.getFullYear() === now.getFullYear();
+      }
+      return true;
+    });
+  }, [periodFilter, projectsQuery.data, statusFilter]);
+
+  type ProjectRow = {
+    id: string;
+    title: string;
+    status: string;
+    start_date: string;
+    end_date: string;
+    total_hours?: number | null;
+  };
+
+  const columns = useMemo<DataTableColumnDef<ProjectRow>[]>(() => {
+    return [
+      {
+        accessorKey: "title",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            Titolo
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        cell: ({ row }) => <span className="font-medium text-slate-900">{row.original.title}</span>,
+        meta: { label: "Titolo" }
+      },
+      {
+        accessorKey: "status",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            Stato
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        cell: ({ row }) => {
+          const status = statusLabel[row.original.status] ?? statusLabel.draft;
+          return <Badge variant={status.variant}>{status.label}</Badge>;
+        },
+        meta: { label: "Stato" }
+      },
+      {
+        accessorKey: "start_date",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            Periodo
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        cell: ({ row }) => (
+          <span className="text-slate-600">
+            {formatDate(row.original.start_date)} - {formatDate(row.original.end_date)}
+          </span>
+        ),
+        meta: { label: "Periodo" }
+      },
+      {
+        id: "sessions",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            # sessioni
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        accessorFn: (row) => {
+          const sessions = sessionsByProject.get(row.id) ?? [];
+          return sessions.length;
+        },
+        cell: ({ row }) => {
+          const isLoadingSessions = sessionsLoadingByProject.get(row.original.id);
+          const sessions = sessionsByProject.get(row.original.id);
+          return isLoadingSessions ? "…" : sessions?.length ?? 0;
+        },
+        meta: { label: "# sessioni" }
+      },
+      {
+        accessorKey: "total_hours",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            Ore totali
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        cell: ({ row }) =>
+          row.original.total_hours !== null && row.original.total_hours !== undefined
+            ? formatHours(row.original.total_hours)
+            : "—",
+        meta: { label: "Ore totali" }
+      },
+      {
+        id: "progress",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            Avanzamento
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        accessorFn: (row) => {
+          const sessions = sessionsByProject.get(row.id) ?? [];
+          const attendanceForProject: Record<string, Array<{ hours: number }>> = {};
+          sessions.forEach((sessionItem) => {
+            if (sessionItem.status === "done") {
+              attendanceForProject[sessionItem.id] = attendanceBySession[sessionItem.id] ?? [];
+            }
+          });
+          return computeProjectProgress(row, sessions, attendanceForProject).progressPct;
+        },
+        cell: ({ row }) => {
+          const sessions = sessionsByProject.get(row.original.id) ?? [];
+          const attendanceForProject: Record<string, Array<{ hours: number }>> = {};
+          sessions.forEach((sessionItem) => {
+            if (sessionItem.status === "done") {
+              attendanceForProject[sessionItem.id] = attendanceBySession[sessionItem.id] ?? [];
+            }
+          });
+          const { progressPct, label, badgeVariant } = computeProjectProgress(
+            row.original,
+            sessions,
+            attendanceForProject
+          );
+          const isLoadingSessions = sessionsLoadingByProject.get(row.original.id);
+          return isLoadingSessions ? (
+            "…"
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-600">{progressPct}%</span>
+              <Badge variant={badgeVariant}>{label}</Badge>
+            </div>
+          );
+        },
+        meta: { label: "Avanzamento" }
+      },
+      {
+        id: "actions",
+        enableHiding: false,
+        header: "Azioni",
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="rounded-md p-1 text-slate-500 opacity-0 transition-opacity hover:bg-slate-100 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+                <DropdownMenuItem
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    router.push(`/app/projects/${row.original.id}`);
+                  }}
+                >
+                  Apri
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    toast({ title: "Modifica progetto (demo)", variant: "success" });
+                  }}
+                >
+                  Modifica
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    toast({ title: "Elimina progetto (demo)", variant: "error" });
+                  }}
+                >
+                  Elimina
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ),
+        meta: { label: "Azioni" }
+      }
+    ];
+  }, [attendanceBySession, router, sessionsByProject, sessionsLoadingByProject, toast]);
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Progetti PCTO</h1>
-          <p className="text-slate-600">Lista progetti</p>
-        </div>
-        <Link
-          href="/app/projects/new"
-          className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-        >
-          Nuovo progetto
-        </Link>
-      </div>
-      <div className="flex gap-3">
-        <Input placeholder="Cerca titolo" />
-        <Input placeholder="Stato" />
-        <Input placeholder="Periodo" />
-      </div>
-      <Card>
-        {projectsQuery.isLoading ? (
-          <p className="p-4 text-sm text-slate-500">Caricamento...</p>
-        ) : (
-          <>
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Titolo</Th>
-                  <Th>Classe</Th>
-                  <Th>Stato</Th>
-                  <Th>Periodo</Th>
-                  <Th># sessioni</Th>
-                  <Th>Ore totali</Th>
-                  <Th>Avanzamento</Th>
-                  <Th>Azioni</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {projectsQuery.data?.map((project, index) => {
-                  const status = statusLabel[project.status] ?? statusLabel.draft;
-                  const sessions = sessionsByProject.get(project.id);
-                  const isLoadingSessions = sessionQueries[index]?.isLoading;
-                  const sessionsCount = sessions?.length ?? 0;
-                  const sessionsList = sessions ?? [];
-                  const attendanceForProject: Record<string, Array<{ hours: number }>> = {};
-                  sessionsList.forEach((sessionItem) => {
-                    if (sessionItem.status === "done") {
-                      attendanceForProject[sessionItem.id] =
-                        attendanceBySession[sessionItem.id] ?? [];
-                    }
-                  });
-                  const { progressPct, label, badgeVariant } = computeProjectProgress(
-                    project,
-                    sessionsList,
-                    attendanceForProject
-                  );
-                  return (
-                    <tr key={project.id}>
-                      <Td>{project.title}</Td>
-                      <Td>{classLabelById.get(project.class_id) ?? "—"}</Td>
-                      <Td>
-                        <Badge variant={status.variant}>{status.label}</Badge>
-                      </Td>
-                      <Td>
-                        {formatDate(project.start_date)} - {formatDate(project.end_date)}
-                      </Td>
-                      <Td>{isLoadingSessions ? "…" : sessionsCount}</Td>
-                      <Td>
-                        {project.total_hours !== null && project.total_hours !== undefined
-                          ? formatHours(project.total_hours)
-                          : "—"}
-                      </Td>
-                      <Td>
-                        {isLoadingSessions ? (
-                          "…"
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-slate-600">{progressPct}%</span>
-                            <Badge variant={badgeVariant}>{label}</Badge>
-                          </div>
-                        )}
-                      </Td>
-                      <Td>
-                        <Link href={`/app/projects/${project.id}`}>Apri</Link>
-                      </Td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </Table>
-            {!projectsQuery.data?.length ? (
-              <div className="p-4 text-sm text-slate-500">
-                Nessun progetto.{" "}
-                <Link href="/app/projects/new" className="text-slate-900 underline">
-                  Crea progetto
-                </Link>
+    <div className="space-y-8">
+      <PageHeader title="Progetti PCTO" description="Lista progetti" />
+      <DataTable
+        columns={columns}
+        data={filteredProjects}
+        loading={projectsQuery.isLoading}
+        onRowClick={(row) => router.push(`/app/projects/${row.id}`)}
+        toolbar={({ table, globalFilter, setGlobalFilter, resultCount }) => (
+          <DataTableToolbar
+            table={table}
+            globalFilter={globalFilter}
+            onGlobalFilterChange={setGlobalFilter}
+            resultCount={resultCount}
+            action={
+              <Button onClick={() => router.push("/app/projects/new")}>
+                Nuovo progetto
+              </Button>
+            }
+            filters={
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Stato</label>
+                  <select
+                    className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                    value={statusFilter}
+                    onChange={(event) => setStatusFilter(event.target.value)}
+                  >
+                    <option value="all">Tutti</option>
+                    <option value="draft">Bozza</option>
+                    <option value="active">Attivo</option>
+                    <option value="closed">Completato</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Periodo</label>
+                  <select
+                    className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                    value={periodFilter}
+                    onChange={(event) => setPeriodFilter(event.target.value)}
+                  >
+                    <option value="all">Tutti</option>
+                    <option value="last-30">Ultimi 30 giorni</option>
+                    <option value="this-month">Questo mese</option>
+                    <option value="this-year">Quest’anno</option>
+                  </select>
+                </div>
               </div>
-            ) : null}
-          </>
+            }
+          />
         )}
-      </Card>
+        emptyState={
+          <EmptyState
+            title="Nessun progetto"
+            description="Crea il primo progetto PCTO per iniziare."
+            actionLabel="Crea progetto"
+            onAction={() => router.push("/app/projects/new")}
+          />
+        }
+      />
       <div className="space-y-3">
         <div>
           <h2 className="text-xl font-semibold">Progetti attivabili</h2>

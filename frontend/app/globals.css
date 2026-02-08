@@ -2,11 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --border: #e6eaf0;
+  --text: #0f172a;
+  --muted: #64748b;
+  --primary: #2563eb;
+  --primarySoft: #eff6ff;
+  --success: #16a34a;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --radius: 14px;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 6px 20px rgba(15, 23, 42, 0.06);
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
 html,
 body {
   height: 100%;
 }
 
 body {
-  @apply bg-slate-50 text-slate-900;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  border-color: var(--border);
 }

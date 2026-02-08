@@ -1,18 +1,32 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowUpDown, MoreHorizontal } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { DataTable } from "@/components/data-table/data-table";
+import { DataTableToolbar } from "@/components/data-table/data-table-toolbar";
+import { EmptyState } from "@/components/data-table/empty-state";
+import { useTableDensity } from "@/components/data-table/use-table-density";
+import type { DataTableColumnDef } from "@/components/data-table/columns";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Table, Td, Th } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/toast";
+import { PageHeader } from "@/components/page-header";
 import { api } from "@/lib/api";
 
 export default function ClassesPage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const { density, setDensity } = useTableDensity("classes-table-density");
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -34,13 +48,13 @@ export default function ClassesPage() {
     queryFn: () => api.getStudents()
   });
 
-  const studentsByClass = new Map<string, number>();
-  (studentsQuery.data ?? []).forEach((student) => {
-    studentsByClass.set(
-      student.class_id,
-      (studentsByClass.get(student.class_id) ?? 0) + 1
-    );
-  });
+  const studentsByClass = useMemo(() => {
+    const map = new Map<string, number>();
+    (studentsQuery.data ?? []).forEach((student) => {
+      map.set(student.class_id, (map.get(student.class_id) ?? 0) + 1);
+    });
+    return map;
+  }, [studentsQuery.data]);
 
   const createClass = useMutation({
     mutationFn: api.createClass,
@@ -100,106 +114,197 @@ export default function ClassesPage() {
       }
       return true;
     });
-  }, [classesQuery.data, filterYear, filterSection]);
+  }, [classesQuery.data, filterSection, filterYear]);
+
+  type ClassRow = {
+    id: string;
+    year: number;
+    section: string;
+  };
+
+  const columns = useMemo<DataTableColumnDef<ClassRow>[]>(() => {
+    return [
+      {
+        id: "label",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            Classe
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        accessorFn: (row) => `${row.year}${row.section}`,
+        cell: ({ row }) => <span className="font-medium">{row.original.year}{row.original.section}</span>,
+        meta: { label: "Classe" }
+      },
+      {
+        accessorKey: "year",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            Anno
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        meta: { label: "Anno" }
+      },
+      {
+        accessorKey: "section",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            Sezione
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        meta: { label: "Sezione" }
+      },
+      {
+        id: "students",
+        header: ({ column }) => (
+          <button
+            className="flex items-center gap-2 text-left"
+            onClick={column.getToggleSortingHandler()}
+          >
+            # Studenti
+            <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+        ),
+        accessorFn: (row) => studentsByClass.get(row.id) ?? 0,
+        cell: ({ row }) => (
+          <button
+            className="text-slate-900 underline"
+            onClick={(event) => {
+              event.stopPropagation();
+              router.push(`/app/students?classId=${row.original.id}`);
+            }}
+          >
+            {studentsQuery.isLoading ? "…" : studentsByClass.get(row.original.id) ?? 0}
+          </button>
+        ),
+        meta: { label: "# Studenti" }
+      },
+      {
+        id: "actions",
+        enableHiding: false,
+        header: "Azioni",
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="rounded-md p-1 text-slate-500 opacity-0 transition-opacity hover:bg-slate-100 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+                <DropdownMenuItem
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    setEditId(row.original.id);
+                    setEditYear(String(row.original.year));
+                    setEditSection(row.original.section);
+                    setEditOpen(true);
+                  }}
+                >
+                  Modifica
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    setDeleteId(row.original.id);
+                  }}
+                >
+                  Elimina
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ),
+        meta: { label: "Azioni" }
+      }
+    ];
+  }, [router, studentsByClass, studentsQuery.isLoading]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Classi</h1>
-          <p className="text-slate-600">Gestisci classi e studenti</p>
-        </div>
-        <Button onClick={() => setOpen(true)}>Crea classe</Button>
-      </div>
-      <div className="flex flex-wrap gap-3">
-        <select
-          className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-          value={filterYear}
-          onChange={(event) => setFilterYear(event.target.value)}
-        >
-          <option value="">Tutti gli anni</option>
-          {yearOptions.map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-        <Input
-          placeholder="Sezione"
-          value={filterSection}
-          onChange={(event) => setFilterSection(event.target.value)}
-        />
-      </div>
-      <Card>
-        {classesQuery.isLoading ? (
-          <p className="p-4 text-sm text-slate-500">Caricamento...</p>
-        ) : (
-          <>
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Anno</Th>
-                  <Th>Sezione</Th>
-                  <Th># studenti</Th>
-                  <Th>Azioni</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredClasses.map((item) => (
-                  <tr key={item.id}>
-                    <Td>{item.year}</Td>
-                    <Td>{item.section}</Td>
-                    <Td>
-                      {studentsQuery.isLoading ? (
-                        "…"
-                      ) : (
-                        <Link
-                          className="text-slate-900 underline"
-                          href={`/app/students?classId=${item.id}`}
-                        >
-                          {studentsByClass.get(item.id) ?? 0}
-                        </Link>
-                      )}
-                    </Td>
-                    <Td>
-                      <div className="flex gap-2">
-                        <button
-                          className="text-sm text-slate-600 underline"
-                          onClick={() => {
-                            setEditId(item.id);
-                            setEditYear(String(item.year));
-                            setEditSection(item.section);
-                            setEditOpen(true);
-                          }}
-                        >
-                          Modifica
-                        </button>
-                        <button
-                          className="text-sm text-rose-600 underline"
-                          onClick={() => setDeleteId(item.id)}
-                        >
-                          Elimina
-                        </button>
-                      </div>
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-            {!filteredClasses.length ? (
-              <div className="p-4 text-sm text-slate-500">
-                Nessuna classe.{" "}
-                <button
-                  className="text-slate-900 underline"
-                  onClick={() => setOpen(true)}
-                >
-                  Crea classe
-                </button>
+    <div className="space-y-8">
+      <PageHeader title="Classi" description="Gestisci classi e studenti" />
+      <DataTable
+        columns={columns}
+        data={filteredClasses}
+        loading={classesQuery.isLoading}
+        density={density}
+        setDensity={setDensity}
+        onRowClick={(row) => router.push(`/app/students?classId=${row.id}`)}
+        globalFilterFn={(row, filterValue) => {
+          const query = filterValue.trim().toLowerCase();
+          if (!query) {
+            return true;
+          }
+          const label = `${row.year}${row.section}`.toLowerCase();
+          return (
+            label.includes(query) ||
+            String(row.year).includes(query) ||
+            row.section.toLowerCase().includes(query)
+          );
+        }}
+        toolbar={({ table, globalFilter, setGlobalFilter, resultCount, density, setDensity }) => (
+          <DataTableToolbar
+            table={table}
+            globalFilter={globalFilter}
+            onGlobalFilterChange={setGlobalFilter}
+            resultCount={resultCount}
+            showDensityToggle
+            density={density}
+            onDensityChange={setDensity}
+            action={<Button onClick={() => setOpen(true)}>Crea classe</Button>}
+            filters={
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Anno</label>
+                  <select
+                    className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                    value={filterYear}
+                    onChange={(event) => setFilterYear(event.target.value)}
+                  >
+                    <option value="">Tutti</option>
+                    {[1, 2, 3, 4, 5].map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Sezione</label>
+                  <Input
+                    value={filterSection}
+                    onChange={(event) => setFilterSection(event.target.value)}
+                    placeholder="Es. A, B, C"
+                    className="mt-1"
+                  />
+                </div>
               </div>
-            ) : null}
-          </>
+            }
+          />
         )}
-      </Card>
+        emptyState={
+          <EmptyState
+            title="Nessuna classe"
+            description="Crea la prima classe per iniziare."
+            actionLabel="Crea classe"
+            onAction={() => setOpen(true)}
+          />
+        }
+      />
 
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
