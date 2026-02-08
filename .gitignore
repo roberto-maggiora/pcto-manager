@@ -1,6 +1,7 @@
 # python
 backend/.venv
 backend/__pycache__
+backend/tests/__pycache__
 *.pyc
 
 # node
