@@ -111,7 +111,7 @@ export default function DashboardPage() {
       label: formatDate(date),
       hours: dateMap.get(date) ?? 0
     }));
-  }, [attendanceRows, sessions]);
+  }, [attendanceRows]);
 
   const barData = useMemo(() => {
     const studentToClass = new Map(

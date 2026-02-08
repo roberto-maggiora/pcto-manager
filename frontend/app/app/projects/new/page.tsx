@@ -17,14 +17,18 @@ export default function NewProjectPage() {
   const [status, setStatus] = useState("draft");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [totalHours, setTotalHours] = useState("");
+  const [description, setDescription] = useState("");
+  const [schoolTutor, setSchoolTutor] = useState("");
+  const [providerExpert, setProviderExpert] = useState("");
   const { toast } = useToast();
 
   const createProject = useMutation({
     mutationFn: api.createProject,
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({ title: "Progetto creato", variant: "success" });
       addActivity("Progetto creato");
-      router.push("/app/projects");
+      router.push(`/app/projects/${data.id}`);
     },
     onError: () => {
       toast({ title: "Errore creazione progetto", variant: "error" });
@@ -62,7 +66,7 @@ export default function NewProjectPage() {
           <div>
             <label className="text-sm font-medium">Data inizio</label>
             <Input
-              placeholder="YYYY-MM-DD"
+              type="date"
               value={startDate}
               onChange={(event) => setStartDate(event.target.value)}
             />
@@ -70,11 +74,43 @@ export default function NewProjectPage() {
           <div>
             <label className="text-sm font-medium">Data fine</label>
             <Input
-              placeholder="YYYY-MM-DD"
+              type="date"
               value={endDate}
               onChange={(event) => setEndDate(event.target.value)}
             />
           </div>
+        </div>
+        <div>
+          <label className="text-sm font-medium">Ore totali PCTO</label>
+          <Input
+            type="number"
+            step="0.5"
+            value={totalHours}
+            onChange={(event) => setTotalHours(event.target.value)}
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Descrizione</label>
+          <textarea
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+            rows={4}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Tutor scolastico</label>
+          <Input
+            value={schoolTutor}
+            onChange={(event) => setSchoolTutor(event.target.value)}
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Esperto/fornitore</label>
+          <Input
+            value={providerExpert}
+            onChange={(event) => setProviderExpert(event.target.value)}
+          />
         </div>
         <Button
           disabled={createProject.isPending}
@@ -83,7 +119,11 @@ export default function NewProjectPage() {
               title: title.trim(),
               status: status || "draft",
               start_date: startDate,
-              end_date: endDate
+              end_date: endDate,
+              description: description.trim() || null,
+              school_tutor_name: schoolTutor.trim() || null,
+              provider_expert_name: providerExpert.trim() || null,
+              total_hours: totalHours ? Number(totalHours) : null
             })
           }
         >

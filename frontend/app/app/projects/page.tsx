@@ -5,13 +5,13 @@ import { useEffect, useMemo } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, Td, Th } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/format";
+import { computeProjectProgress } from "@/lib/progress";
 
 const statusLabel: Record<string, { label: string; variant: "draft" | "active" | "closed" }> = {
   draft: { label: "Bozza", variant: "draft" },
@@ -41,13 +41,43 @@ export default function ProjectsPage() {
   });
 
   const sessionsByProject = useMemo(() => {
-    const map = new Map<string, Array<{ planned_hours: number }>>();
+    const map = new Map<
+      string,
+      Array<{ id: string; planned_hours: number; status: "scheduled" | "done" }>
+    >();
     (projectsQuery.data ?? []).forEach((project, index) => {
       const data = sessionQueries[index]?.data ?? [];
       map.set(project.id, data);
     });
     return map;
   }, [projectsQuery.data, sessionQueries]);
+
+  const doneSessionPairs = useMemo(
+    () =>
+      (projectsQuery.data ?? []).flatMap((project) => {
+        const sessions = sessionsByProject.get(project.id) ?? [];
+        return sessions
+          .filter((sessionItem) => sessionItem.status === "done")
+          .map((sessionItem) => ({ projectId: project.id, sessionId: sessionItem.id }));
+      }),
+    [projectsQuery.data, sessionsByProject]
+  );
+
+  const attendanceQueries = useQueries({
+    queries: doneSessionPairs.map((pair) => ({
+      queryKey: ["attendance", pair.sessionId],
+      queryFn: () => api.getSessionAttendance(pair.sessionId),
+      enabled: Boolean(pair.sessionId)
+    }))
+  });
+
+  const attendanceBySession = useMemo(() => {
+    const map: Record<string, Array<{ hours: number }>> = {};
+    doneSessionPairs.forEach((pair, index) => {
+      map[pair.sessionId] = attendanceQueries[index]?.data ?? [];
+    });
+    return map;
+  }, [attendanceQueries, doneSessionPairs]);
 
   const formatHours = (value: number) =>
     Number.isInteger(value) ? `${value}` : value.toFixed(1);
@@ -84,6 +114,7 @@ export default function ProjectsPage() {
                   <Th>Periodo</Th>
                   <Th># sessioni</Th>
                   <Th>Ore totali</Th>
+                  <Th>Avanzamento</Th>
                   <Th>Azioni</Th>
                 </tr>
               </thead>
@@ -93,9 +124,18 @@ export default function ProjectsPage() {
                   const sessions = sessionsByProject.get(project.id);
                   const isLoadingSessions = sessionQueries[index]?.isLoading;
                   const sessionsCount = sessions?.length ?? 0;
-                  const totalHours = sessions?.reduce(
-                    (sum, item) => sum + (item.planned_hours ?? 0),
-                    0
+                  const sessionsList = sessions ?? [];
+                  const attendanceForProject: Record<string, Array<{ hours: number }>> = {};
+                  sessionsList.forEach((sessionItem) => {
+                    if (sessionItem.status === "done") {
+                      attendanceForProject[sessionItem.id] =
+                        attendanceBySession[sessionItem.id] ?? [];
+                    }
+                  });
+                  const { progressPct, label } = computeProjectProgress(
+                    project,
+                    sessionsList,
+                    attendanceForProject
                   );
                   return (
                     <tr key={project.id}>
@@ -107,7 +147,23 @@ export default function ProjectsPage() {
                         {formatDate(project.start_date)} - {formatDate(project.end_date)}
                       </Td>
                       <Td>{isLoadingSessions ? "…" : sessionsCount}</Td>
-                      <Td>{isLoadingSessions ? "…" : formatHours(totalHours ?? 0)}</Td>
+                      <Td>
+                        {project.total_hours !== null && project.total_hours !== undefined
+                          ? formatHours(project.total_hours)
+                          : "—"}
+                      </Td>
+                      <Td>
+                        {isLoadingSessions ? (
+                          "…"
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-slate-600">{progressPct}%</span>
+                            <Badge variant={progressPct === 100 ? "active" : "draft"}>
+                              {label}
+                            </Badge>
+                          </div>
+                        )}
+                      </Td>
                       <Td>
                         <Link href={`/app/projects/${project.id}`}>Apri</Link>
                       </Td>

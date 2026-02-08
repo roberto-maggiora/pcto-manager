@@ -16,3 +16,6 @@ frontend/.next
 
 # storage
 backend/storage
+
+# sqlite
+backend/dev.db

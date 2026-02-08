@@ -36,18 +36,93 @@ export const api = {
       body: JSON.stringify({ email, password })
     }),
   getProject: (projectId: string) =>
-    request<{ id: string; title: string; status: string; start_date: string; end_date: string }>(
-      `/v1/projects/${projectId}`
-    ),
-  getProjects: () => request<Array<{ id: string; title: string; status: string; start_date: string; end_date: string }>>("/v1/projects"),
-  createProject: (payload: { title: string; status: string; start_date: string; end_date: string }) =>
-    request("/v1/projects", { method: "POST", body: JSON.stringify(payload) }),
+    request<{
+      id: string;
+      title: string;
+      status: string;
+      start_date: string;
+      end_date: string;
+      description?: string | null;
+      school_tutor_name?: string | null;
+      provider_expert_name?: string | null;
+      total_hours?: number | null;
+    }>(`/v1/projects/${projectId}`),
+  getProjects: () =>
+    request<
+      Array<{
+        id: string;
+        title: string;
+        status: string;
+        start_date: string;
+        end_date: string;
+        total_hours?: number | null;
+      }>
+    >("/v1/projects"),
+  createProject: (payload: {
+    title: string;
+    status: string;
+    start_date: string;
+    end_date: string;
+    description?: string | null;
+    school_tutor_name?: string | null;
+    provider_expert_name?: string | null;
+    total_hours?: number | null;
+  }) =>
+    request<{ id: string }>(`/v1/projects`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  patchProject: (
+    projectId: string,
+    payload: {
+      title?: string;
+      status?: string;
+      start_date?: string;
+      end_date?: string;
+      description?: string | null;
+      school_tutor_name?: string | null;
+      provider_expert_name?: string | null;
+      total_hours?: number | null;
+    }
+  ) => request(`/v1/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   getSessions: (projectId: string) =>
-    request<Array<{ id: string; start: string; end: string; planned_hours: number }>>(
+    request<
+      Array<{
+        id: string;
+        start: string;
+        end: string;
+        planned_hours: number;
+        topic?: string | null;
+        status: "scheduled" | "done";
+      }>
+    >(
       `/v1/projects/${projectId}/sessions`
     ),
-  createSession: (projectId: string, payload: { start: string; end: string; planned_hours: number }) =>
+  createSession: (
+    projectId: string,
+    payload: {
+      start: string;
+      end: string;
+      planned_hours: number;
+      topic?: string | null;
+      status?: "scheduled" | "done";
+    }
+  ) =>
     request(`/v1/projects/${projectId}/sessions`, { method: "POST", body: JSON.stringify(payload) }),
+  patchSession: (
+    sessionId: string,
+    payload: {
+      start?: string;
+      end?: string;
+      planned_hours?: number;
+      topic?: string | null;
+      status?: "scheduled" | "done";
+    }
+  ) => request(`/v1/sessions/${sessionId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteSession: (sessionId: string) =>
+    request(`/v1/sessions/${sessionId}`, { method: "DELETE" }),
+  deleteProject: (projectId: string) =>
+    request(`/v1/projects/${projectId}`, { method: "DELETE" }),
   postAttendance: (sessionId: string, payload: Array<{ student_id: string; status: string; hours: number }>) =>
     request<{ updated: number }>(`/v1/sessions/${sessionId}/attendance`, {
       method: "POST",

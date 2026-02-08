@@ -13,6 +13,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy import delete
 from sqlmodel import Session, select
 
 from app.core.config import settings
@@ -30,6 +31,7 @@ from app.models import (
     School,
     SchoolBranding,
     Session as ProjectSession,
+    SessionStatus,
     Student,
     User,
 )
@@ -78,6 +80,21 @@ class ProjectCreate(BaseModel):
     status: ProjectStatus
     start_date: date
     end_date: date
+    description: str | None = None
+    school_tutor_name: str | None = None
+    provider_expert_name: str | None = None
+    total_hours: float | None = None
+
+
+class ProjectUpdate(BaseModel):
+    title: str | None = None
+    status: ProjectStatus | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    description: str | None = None
+    school_tutor_name: str | None = None
+    provider_expert_name: str | None = None
+    total_hours: float | None = None
 
 
 class BrandingResponse(BaseModel):
@@ -99,6 +116,16 @@ class SessionCreate(BaseModel):
     start: datetime
     end: datetime
     planned_hours: float
+    topic: str | None = None
+    status: SessionStatus | None = None
+
+
+class SessionUpdate(BaseModel):
+    start: datetime | None = None
+    end: datetime | None = None
+    planned_hours: float | None = None
+    topic: str | None = None
+    status: SessionStatus | None = None
 
 
 class AttendanceUpsertItem(BaseModel):
@@ -135,12 +162,21 @@ def create_project(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User has no school",
         )
+    if payload.total_hours is not None and payload.total_hours < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="total_hours must be >= 0",
+        )
     project = Project(
         school_id=current_user.school_id,
         title=payload.title,
         status=payload.status,
         start_date=payload.start_date,
         end_date=payload.end_date,
+        description=payload.description,
+        school_tutor_name=payload.school_tutor_name,
+        provider_expert_name=payload.provider_expert_name,
+        total_hours=payload.total_hours,
     )
     session.add(project)
     session.commit()
@@ -283,6 +319,86 @@ def get_project(
     return project
 
 
+@app.patch("/v1/projects/{project_id}", response_model=Project)
+@app.patch("/v1/projects/{project_id}/", response_model=Project)
+def update_project(
+    project_id: UUID,
+    payload: ProjectUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> Project:
+    if not current_user.school_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User has no school",
+        )
+    project = session.exec(
+        select(Project).where(
+            Project.id == project_id, Project.school_id == current_user.school_id
+        )
+    ).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    data = payload.model_dump(exclude_unset=True)
+    if "total_hours" in data and data["total_hours"] is not None:
+        if data["total_hours"] < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="total_hours must be >= 0",
+            )
+    for key, value in data.items():
+        setattr(project, key, value)
+    session.commit()
+    session.refresh(project)
+    return project
+
+
+@app.delete("/v1/projects/{project_id}")
+def delete_project(
+    project_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    if not current_user.school_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User has no school",
+        )
+    project = session.exec(
+        select(Project).where(
+            Project.id == project_id, Project.school_id == current_user.school_id
+        )
+    ).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    session_ids = list(
+        session.exec(
+            select(ProjectSession.id).where(
+                ProjectSession.project_id == project_id,
+                ProjectSession.school_id == current_user.school_id,
+            )
+        ).all()
+    )
+    if session_ids:
+        session.exec(
+            delete(Attendance).where(
+                Attendance.session_id.in_(session_ids),
+                Attendance.school_id == current_user.school_id,
+            )
+        )
+    session.exec(
+        delete(ProjectSession).where(
+            ProjectSession.project_id == project_id,
+            ProjectSession.school_id == current_user.school_id,
+        )
+    )
+    session.delete(project)
+    session.commit()
+    return {"deleted": True}
+
+
 @app.post("/v1/projects/{project_id}/sessions", response_model=ProjectSession)
 def create_session(
     project_id: UUID,
@@ -302,12 +418,23 @@ def create_session(
     ).first()
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if payload.end <= payload.start:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="End must be after start"
+        )
+    if payload.planned_hours < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="planned_hours must be >= 0",
+        )
     new_session = ProjectSession(
         school_id=current_user.school_id,
         project_id=project.id,
         start=payload.start,
         end=payload.end,
         planned_hours=payload.planned_hours,
+        topic=payload.topic,
+        status=payload.status or SessionStatus.scheduled,
     )
     session.add(new_session)
     session.commit()
@@ -341,6 +468,78 @@ def list_sessions(
             )
         ).all()
     )
+
+
+@app.patch("/v1/sessions/{session_id}", response_model=ProjectSession)
+def update_session(
+    session_id: UUID,
+    payload: SessionUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> ProjectSession:
+    if not current_user.school_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User has no school",
+        )
+    project_session = session.exec(
+        select(ProjectSession).where(
+            ProjectSession.id == session_id,
+            ProjectSession.school_id == current_user.school_id,
+        )
+    ).first()
+    if not project_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    data = payload.model_dump(exclude_unset=True)
+    next_start = data.get("start", project_session.start)
+    next_end = data.get("end", project_session.end)
+    if next_end <= next_start:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="End must be after start"
+        )
+    if payload.planned_hours is not None and payload.planned_hours < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="planned_hours must be >= 0",
+        )
+
+    for key, value in data.items():
+        setattr(project_session, key, value)
+    session.commit()
+    session.refresh(project_session)
+    return project_session
+
+
+@app.delete("/v1/sessions/{session_id}")
+def delete_session(
+    session_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    if not current_user.school_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User has no school",
+        )
+    project_session = session.exec(
+        select(ProjectSession).where(
+            ProjectSession.id == session_id,
+            ProjectSession.school_id == current_user.school_id,
+        )
+    ).first()
+    if not project_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    session.exec(
+        delete(Attendance).where(
+            Attendance.session_id == session_id,
+            Attendance.school_id == current_user.school_id,
+        )
+    )
+    session.delete(project_session)
+    session.commit()
+    return {"deleted": True}
 
 
 @app.post("/v1/sessions/{session_id}/attendance")

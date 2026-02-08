@@ -28,6 +28,11 @@ class AttendanceStatus(str, Enum):
     absent = "absent"
 
 
+class SessionStatus(str, Enum):
+    scheduled = "scheduled"
+    done = "done"
+
+
 class School(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str
@@ -100,6 +105,10 @@ class Project(SQLModel, table=True):
     )
     start_date: date
     end_date: date
+    description: Optional[str] = None
+    school_tutor_name: Optional[str] = None
+    provider_expert_name: Optional[str] = None
+    total_hours: Optional[float] = None
 
 
 class Session(SQLModel, table=True):
@@ -109,6 +118,11 @@ class Session(SQLModel, table=True):
     start: datetime
     end: datetime
     planned_hours: float
+    topic: Optional[str] = None
+    status: SessionStatus = Field(
+        default=SessionStatus.scheduled,
+        sa_column=Column(SAEnum(SessionStatus), nullable=False),
+    )
 
 
 class Attendance(SQLModel, table=True):
