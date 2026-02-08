@@ -46,6 +46,7 @@ def test_get_session_attendance_tenant_scoped(client):
 
         project = Project(
             school_id=school_a.id,
+            class_id=classroom.id,
             title="PCTO",
             status=ProjectStatus.active,
             start_date=date(2026, 2, 1),

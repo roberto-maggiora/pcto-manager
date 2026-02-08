@@ -15,6 +15,14 @@ import { formatDate, formatDateTime } from "@/lib/format";
 import { computeProjectProgress } from "@/lib/progress";
 
 type TabKey = "overview" | "sessions" | "attendance" | "exports";
+type InlineSessionRow = {
+  id: string;
+  start: string;
+  end: string;
+  plannedHours: string;
+  topic: string;
+  status: "scheduled" | "done";
+};
 
 const statusLabel: Record<string, { label: string; variant: "draft" | "active" | "closed" }> = {
   draft: { label: "Bozza", variant: "draft" },
@@ -56,6 +64,7 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
   const [editSessionStatus, setEditSessionStatus] = useState<"scheduled" | "done">(
     "scheduled"
   );
+  const [markDoneSessionId, setMarkDoneSessionId] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [filterClassId, setFilterClassId] = useState("");
   const [editTitle, setEditTitle] = useState("");
@@ -63,9 +72,12 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
   const [editStartDate, setEditStartDate] = useState("");
   const [editEndDate, setEditEndDate] = useState("");
   const [editTotalHours, setEditTotalHours] = useState("");
+  const [editClassId, setEditClassId] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editSchoolTutor, setEditSchoolTutor] = useState("");
   const [editProviderExpert, setEditProviderExpert] = useState("");
+  const [inlineRows, setInlineRows] = useState<InlineSessionRow[]>([]);
+  const [savingInlineRowId, setSavingInlineRowId] = useState<string | null>(null);
   const [attendanceBySession, setAttendanceBySession] = useState<
     Record<string, Record<string, { status: "present" | "absent"; hours: number }>>
   >({});
@@ -138,6 +150,38 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
     }
   });
 
+  const createInlineSession = useMutation({
+    mutationFn: (payload: {
+      rowId: string;
+      start: string;
+      end: string;
+      planned_hours: number;
+      topic?: string | null;
+      status?: "scheduled" | "done";
+    }) =>
+      api.createSession(params.projectId, {
+        start: payload.start,
+        end: payload.end,
+        planned_hours: payload.planned_hours,
+        topic: payload.topic,
+        status: payload.status
+      }),
+    onSuccess: async (_, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ["project", params.projectId] });
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      await queryClient.invalidateQueries({ queryKey: ["students"] });
+      await queryClient.invalidateQueries({ queryKey: ["attendance"] });
+      setInlineRows((prev) => prev.filter((row) => row.id !== variables.rowId));
+      setSavingInlineRowId(null);
+      toast({ title: "Sessione creata", variant: "success" });
+    },
+    onError: () => {
+      setSavingInlineRowId(null);
+      toast({ title: "Errore creazione sessione", variant: "error" });
+    }
+  });
+
   const updateSession = useMutation({
     mutationFn: (payload: {
       sessionId: string;
@@ -199,12 +243,30 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
     }
   });
 
+  const markSessionDone = useMutation({
+    mutationFn: (sessionId: string) =>
+      api.patchSession(sessionId, { status: "done" }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["project", params.projectId] });
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      await queryClient.invalidateQueries({ queryKey: ["students"] });
+      await queryClient.invalidateQueries({ queryKey: ["attendance"] });
+      setMarkDoneSessionId(null);
+      toast({ title: "Sessione segnata come svolta", variant: "success" });
+    },
+    onError: () => {
+      toast({ title: "Errore aggiornamento sessione", variant: "error" });
+    }
+  });
+
   const updateProject = useMutation({
     mutationFn: (payload: {
       title?: string;
       status?: string;
       start_date?: string;
       end_date?: string;
+      class_id?: string;
       description?: string | null;
       school_tutor_name?: string | null;
       provider_expert_name?: string | null;
@@ -243,6 +305,9 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
       }
       addActivity(`Presenze salvate (${data.updated})`);
       toast({ title: `Presenze salvate (${data.updated} aggiornate)`, variant: "success" });
+      if (selectedSession?.status === "scheduled") {
+        setMarkDoneSessionId(selectedSession.id);
+      }
       await queryClient.invalidateQueries({ queryKey: ["project", params.projectId] });
       await queryClient.invalidateQueries({ queryKey: ["sessions"] });
       await queryClient.invalidateQueries({ queryKey: ["students"] });
@@ -279,6 +344,7 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
         ? String(projectQuery.data.total_hours)
         : ""
     );
+    setEditClassId(projectQuery.data.class_id ?? "");
     setEditDescription(projectQuery.data.description ?? "");
     setEditSchoolTutor(projectQuery.data.school_tutor_name ?? "");
     setEditProviderExpert(projectQuery.data.provider_expert_name ?? "");
@@ -319,6 +385,10 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
   }, [studentsQuery.data, selectedSessionId]);
 
   const projectStatus = statusLabel[projectQuery.data?.status ?? "draft"];
+  const selectedSession = useMemo(
+    () => (sessionsQuery.data ?? []).find((item) => item.id === selectedSessionId),
+    [selectedSessionId, sessionsQuery.data]
+  );
 
   const totalHours =
     projectQuery.data?.total_hours !== undefined ? projectQuery.data?.total_hours : null;
@@ -340,7 +410,8 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
     return map;
   }, [doneAttendanceQueries, doneSessions]);
 
-  const { usedHours, progressPct } = computeProjectProgress(
+  const { usedHours, progressPct, label: progressLabel, badgeVariant: progressVariant } =
+    computeProjectProgress(
     projectQuery.data ?? {},
     sessionsQuery.data ?? [],
     attendanceByDoneSession
@@ -353,6 +424,50 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
     () => sessionsQuery.data ?? [],
     [sessionsQuery.data]
   );
+
+  const addInlineRow = () => {
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    setInlineRows((prev) => [
+      {
+        id,
+        start: "",
+        end: "",
+        plannedHours: "",
+        topic: "",
+        status: "scheduled"
+      },
+      ...prev
+    ]);
+  };
+
+  const updateInlineRow = (rowId: string, patch: Partial<InlineSessionRow>) => {
+    setInlineRows((prev) =>
+      prev.map((row) => (row.id === rowId ? { ...row, ...patch } : row))
+    );
+  };
+
+  const removeInlineRow = (rowId: string) => {
+    setInlineRows((prev) => prev.filter((row) => row.id !== rowId));
+  };
+
+  const saveInlineRow = (row: InlineSessionRow) => {
+    if (!row.start || !row.end || Number(row.plannedHours) <= 0) {
+      toast({ title: "Completa inizio, fine e ore pianificate", variant: "error" });
+      return;
+    }
+    setSavingInlineRowId(row.id);
+    createInlineSession.mutate({
+      rowId: row.id,
+      start: new Date(row.start).toISOString(),
+      end: new Date(row.end).toISOString(),
+      planned_hours: Number(row.plannedHours),
+      topic: row.topic.trim() || null,
+      status: row.status
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -447,6 +562,10 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
                   <p className="text-sm text-slate-500">Avanzamento</p>
                   <p className="text-lg font-semibold">{progressPct}%</p>
                 </div>
+                <div>
+                  <p className="text-sm text-slate-500">Stato</p>
+                  <Badge variant={progressVariant}>{progressLabel}</Badge>
+                </div>
               </div>
               <div className="mt-3 h-2 w-full rounded-full bg-slate-100">
                 <div
@@ -493,6 +612,22 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
                   <option value="draft">Bozza</option>
                   <option value="active">Attivo</option>
                   <option value="closed">Chiuso</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Classe</label>
+                <select
+                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                  value={editClassId}
+                  onChange={(event) => setEditClassId(event.target.value)}
+                >
+                  <option value="">Seleziona classe</option>
+                  {(classesQuery.data ?? []).map((classItem) => (
+                    <option key={classItem.id} value={classItem.id}>
+                      {classItem.year}
+                      {classItem.section}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -546,13 +681,14 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
             </div>
             <div>
               <Button
-                disabled={updateProject.isPending}
+                disabled={updateProject.isPending || !editClassId}
                 onClick={() =>
                   updateProject.mutate({
                     title: editTitle.trim() || undefined,
                     status: editStatus,
                     start_date: editStartDate || undefined,
                     end_date: editEndDate || undefined,
+                    class_id: editClassId || undefined,
                     description: editDescription.trim() || null,
                     school_tutor_name: editSchoolTutor.trim() || null,
                     provider_expert_name: editProviderExpert.trim() || null,
@@ -576,7 +712,12 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
 
       {tab === "sessions" ? (
         <Card>
-          <h2 className="mb-3 text-lg font-medium">Sessioni</h2>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-medium">Sessioni</h2>
+            <Button variant="secondary" onClick={addInlineRow}>
+              Aggiungi riga
+            </Button>
+          </div>
           {sessionsQuery.isLoading ? (
             <p className="p-4 text-sm text-slate-500">Caricamento...</p>
           ) : (
@@ -592,6 +733,77 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
                 </tr>
               </thead>
               <tbody>
+                {inlineRows.map((row) => (
+                  <tr key={row.id} className="bg-slate-50">
+                    <Td>
+                      <Input
+                        type="datetime-local"
+                        value={row.start}
+                        onChange={(event) =>
+                          updateInlineRow(row.id, { start: event.target.value })
+                        }
+                      />
+                    </Td>
+                    <Td>
+                      <Input
+                        type="datetime-local"
+                        value={row.end}
+                        onChange={(event) =>
+                          updateInlineRow(row.id, { end: event.target.value })
+                        }
+                      />
+                    </Td>
+                    <Td>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        value={row.plannedHours}
+                        onChange={(event) =>
+                          updateInlineRow(row.id, { plannedHours: event.target.value })
+                        }
+                      />
+                    </Td>
+                    <Td>
+                      <Input
+                        value={row.topic}
+                        onChange={(event) =>
+                          updateInlineRow(row.id, { topic: event.target.value })
+                        }
+                      />
+                    </Td>
+                    <Td>
+                      <select
+                        className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                        value={row.status}
+                        onChange={(event) =>
+                          updateInlineRow(row.id, {
+                            status: event.target.value as "scheduled" | "done"
+                          })
+                        }
+                      >
+                        <option value="scheduled">Programmata</option>
+                        <option value="done">Svolta</option>
+                      </select>
+                    </Td>
+                    <Td>
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="rounded-md bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+                          disabled={savingInlineRowId === row.id}
+                          onClick={() => saveInlineRow(row)}
+                        >
+                          {savingInlineRowId === row.id ? "Salvataggio" : "Salva"}
+                        </button>
+                        <button
+                          className="rounded-md border border-slate-200 px-3 py-2 text-sm"
+                          onClick={() => removeInlineRow(row.id)}
+                        >
+                          Annulla
+                        </button>
+                      </div>
+                    </Td>
+                  </tr>
+                ))}
                 {sessionsQuery.data?.map((item) => (
                   <tr key={item.id}>
                     <Td>{formatDateTime(item.start)}</Td>
@@ -1014,6 +1226,40 @@ export default function ProjectDetailPage({ params }: { params: { projectId: str
                   </span>
                 ) : (
                   "Elimina"
+                )}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
+      {markDoneSessionId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <Card className="w-full max-w-sm space-y-4">
+            <div>
+              <h2 className="text-lg font-medium">Presenze salvate</h2>
+              <p className="text-sm text-slate-600">
+                Vuoi segnare questa sessione come svolta?
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => setMarkDoneSessionId(null)}
+                disabled={markSessionDone.isPending}
+              >
+                Non ora
+              </Button>
+              <Button
+                onClick={() => markSessionDone.mutate(markDoneSessionId)}
+                disabled={markSessionDone.isPending}
+              >
+                {markSessionDone.isPending ? (
+                  <span className="flex items-center gap-2">
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Salvataggio
+                  </span>
+                ) : (
+                  "Segna come svolta"
                 )}
               </Button>
             </div>

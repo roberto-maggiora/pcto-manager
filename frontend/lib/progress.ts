@@ -12,6 +12,8 @@ type AttendanceLike = {
   hours: number;
 };
 
+export type ProgressBadgeVariant = "draft" | "active" | "closed";
+
 export function computeProjectProgress(
   project: ProjectLike,
   sessions: SessionLike[],
@@ -32,7 +34,15 @@ export function computeProjectProgress(
   const totalHours = project.total_hours ?? 0;
   const progressPct =
     totalHours > 0 ? Math.min(100, Math.round((usedHours / totalHours) * 100)) : 0;
-  const label = progressPct === 100 ? "Completato" : "In corso";
+  let label: "Non iniziato" | "In corso" | "Completato" = "In corso";
+  if (usedHours <= 0 || progressPct === 0) {
+    label = "Non iniziato";
+  } else if (progressPct >= 100) {
+    label = "Completato";
+  }
 
-  return { usedHours, progressPct, label };
+  const badgeVariant: ProgressBadgeVariant =
+    label === "Non iniziato" ? "draft" : label === "Completato" ? "closed" : "active";
+
+  return { usedHours, progressPct, label, badgeVariant };
 }

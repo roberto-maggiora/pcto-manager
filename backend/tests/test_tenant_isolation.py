@@ -21,6 +21,12 @@ def test_cross_tenant_project_access_returns_404(client):
     token_a = _login(client, admin_a["email"], "admin123!")
     token_b = _login(client, admin_b["email"], "admin123!")
 
+    class_resp = client.post(
+        "/v1/classes",
+        json={"year": 4, "section": "A"},
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert class_resp.status_code == 200
     create_response = client.post(
         "/v1/projects",
         json={
@@ -28,6 +34,7 @@ def test_cross_tenant_project_access_returns_404(client):
             "status": "active",
             "start_date": "2026-02-01",
             "end_date": "2026-03-01",
+            "class_id": class_resp.json()["id"],
         },
         headers={"Authorization": f"Bearer {token_a}"},
     )

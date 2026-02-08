@@ -13,7 +13,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy import delete
+from sqlalchemy import delete, func
 from sqlmodel import Session, select
 
 from app.core.config import settings
@@ -80,6 +80,7 @@ class ProjectCreate(BaseModel):
     status: ProjectStatus
     start_date: date
     end_date: date
+    class_id: UUID
     description: str | None = None
     school_tutor_name: str | None = None
     provider_expert_name: str | None = None
@@ -91,6 +92,7 @@ class ProjectUpdate(BaseModel):
     status: ProjectStatus | None = None
     start_date: date | None = None
     end_date: date | None = None
+    class_id: UUID | None = None
     description: str | None = None
     school_tutor_name: str | None = None
     provider_expert_name: str | None = None
@@ -145,10 +147,49 @@ class ClassCreate(BaseModel):
     section: str
 
 
+class ClassUpdate(BaseModel):
+    year: int | None = None
+    section: str | None = None
+    name: str | None = None
+
+
 class StudentCreate(BaseModel):
     class_id: UUID
     first_name: str
     last_name: str
+    pcto_required_hours: int | None = None
+
+
+class StudentUpdate(BaseModel):
+    class_id: UUID | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    pcto_required_hours: int | None = None
+
+
+class StudentMetric(BaseModel):
+    student_id: UUID
+    completed_hours: float
+
+
+class StudentProjectSummary(BaseModel):
+    project_id: UUID
+    title: str
+    status: ProjectStatus
+    completed_hours: float
+    last_session_end: datetime | None
+
+
+class StudentSummary(BaseModel):
+    id: UUID
+    first_name: str
+    last_name: str
+    class_id: UUID
+    class_year: int
+    class_section: str
+    pcto_required_hours: int
+    completed_hours_total: float
+    by_project: list[StudentProjectSummary]
 
 
 @app.post("/v1/projects", response_model=Project)
@@ -167,8 +208,17 @@ def create_project(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="total_hours must be >= 0",
         )
+    classroom = session.exec(
+        select(ClassRoom).where(
+            ClassRoom.id == payload.class_id,
+            ClassRoom.school_id == current_user.school_id,
+        )
+    ).first()
+    if not classroom:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     project = Project(
         school_id=current_user.school_id,
+        class_id=payload.class_id,
         title=payload.title,
         status=payload.status,
         start_date=payload.start_date,
@@ -212,6 +262,16 @@ def create_class(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User has no school",
         )
+    exists = session.exec(
+        select(ClassRoom).where(
+            ClassRoom.school_id == current_user.school_id,
+            ClassRoom.year == payload.year,
+            ClassRoom.section == payload.section,
+        )
+    ).first()
+    if exists:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Classe già esistente")
+
     class_name = f"{payload.year}{payload.section}"
     class_row = ClassRoom(
         school_id=current_user.school_id,
@@ -223,6 +283,94 @@ def create_class(
     session.commit()
     session.refresh(class_row)
     return class_row
+
+
+@app.patch("/v1/classes/{class_id}", response_model=ClassRoom)
+def update_class(
+    class_id: UUID,
+    payload: ClassUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> ClassRoom:
+    if not current_user.school_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User has no school",
+        )
+    class_row = session.exec(
+        select(ClassRoom).where(
+            ClassRoom.id == class_id,
+            ClassRoom.school_id == current_user.school_id,
+        )
+    ).first()
+    if not class_row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    data = payload.model_dump(exclude_unset=True)
+    next_year = data.get("year", class_row.year)
+    next_section = data.get("section", class_row.section)
+    if (
+        next_year != class_row.year
+        or next_section != class_row.section
+    ):
+        exists = session.exec(
+            select(ClassRoom).where(
+                ClassRoom.school_id == current_user.school_id,
+                ClassRoom.year == next_year,
+                ClassRoom.section == next_section,
+                ClassRoom.id != class_id,
+            )
+        ).first()
+        if exists:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Classe già esistente"
+            )
+
+    if "name" not in data:
+        data["name"] = f"{next_year}{next_section}"
+
+    for key, value in data.items():
+        setattr(class_row, key, value)
+    session.commit()
+    session.refresh(class_row)
+    return class_row
+
+
+@app.delete("/v1/classes/{class_id}")
+def delete_class(
+    class_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    if not current_user.school_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User has no school",
+        )
+    class_row = session.exec(
+        select(ClassRoom).where(
+            ClassRoom.id == class_id,
+            ClassRoom.school_id == current_user.school_id,
+        )
+    ).first()
+    if not class_row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    has_students = session.exec(
+        select(Student.id).where(
+            Student.class_id == class_id,
+            Student.school_id == current_user.school_id,
+        )
+    ).first()
+    if has_students:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Impossibile eliminare: la classe ha studenti",
+        )
+
+    session.delete(class_row)
+    session.commit()
+    return {"deleted": True}
 
 
 @app.get("/v1/classes", response_model=list[ClassRoom])
@@ -261,11 +409,17 @@ def create_student(
     ).first()
     if not classroom:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if payload.pcto_required_hours is not None and payload.pcto_required_hours < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="pcto_required_hours must be >= 0",
+        )
     student = Student(
         school_id=current_user.school_id,
         class_id=payload.class_id,
         first_name=payload.first_name,
         last_name=payload.last_name,
+        pcto_required_hours=payload.pcto_required_hours or 150,
     )
     session.add(student)
     session.commit()
@@ -296,6 +450,182 @@ def list_students(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
         query = query.where(Student.class_id == class_id)
     return list(session.exec(query).all())
+
+
+@app.patch("/v1/students/{student_id}", response_model=Student)
+def update_student(
+    student_id: UUID,
+    payload: StudentUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> Student:
+    if not current_user.school_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User has no school",
+        )
+    student = session.exec(
+        select(Student).where(
+            Student.id == student_id,
+            Student.school_id == current_user.school_id,
+        )
+    ).first()
+    if not student:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    data = payload.model_dump(exclude_unset=True)
+    if "class_id" in data:
+        classroom = session.exec(
+            select(ClassRoom).where(
+                ClassRoom.id == data["class_id"],
+                ClassRoom.school_id == current_user.school_id,
+            )
+        ).first()
+        if not classroom:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if "pcto_required_hours" in data and data["pcto_required_hours"] is not None:
+        if data["pcto_required_hours"] < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="pcto_required_hours must be >= 0",
+            )
+
+    for key, value in data.items():
+        setattr(student, key, value)
+    session.commit()
+    session.refresh(student)
+    return student
+
+
+@app.delete("/v1/students/{student_id}")
+def delete_student(
+    student_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    if not current_user.school_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User has no school",
+        )
+    student = session.exec(
+        select(Student).where(
+            Student.id == student_id,
+            Student.school_id == current_user.school_id,
+        )
+    ).first()
+    if not student:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    session.exec(
+        delete(Attendance).where(
+            Attendance.student_id == student_id,
+            Attendance.school_id == current_user.school_id,
+        )
+    )
+    session.delete(student)
+    session.commit()
+    return {"deleted": True}
+
+
+@app.get("/v1/students/metrics", response_model=list[StudentMetric])
+def list_student_metrics(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[StudentMetric]:
+    if not current_user.school_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User has no school",
+        )
+    rows = session.exec(
+        select(
+            Student.id,
+            func.coalesce(func.sum(Attendance.hours), 0.0),
+        )
+        .outerjoin(
+            Attendance,
+            (Attendance.student_id == Student.id)
+            & (Attendance.school_id == current_user.school_id),
+        )
+        .where(Student.school_id == current_user.school_id)
+        .group_by(Student.id)
+    ).all()
+    return [
+        StudentMetric(student_id=row[0], completed_hours=float(row[1] or 0.0))
+        for row in rows
+    ]
+
+
+@app.get("/v1/students/{student_id}/summary", response_model=StudentSummary)
+def get_student_summary(
+    student_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StudentSummary:
+    if not current_user.school_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User has no school",
+        )
+    row = session.exec(
+        select(Student, ClassRoom).where(
+            Student.id == student_id,
+            Student.school_id == current_user.school_id,
+            ClassRoom.id == Student.class_id,
+        )
+    ).first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    student, classroom = row
+
+    total_hours = session.exec(
+        select(func.coalesce(func.sum(Attendance.hours), 0.0)).where(
+            Attendance.student_id == student_id,
+            Attendance.school_id == current_user.school_id,
+        )
+    ).one()
+
+    project_rows = session.exec(
+        select(
+            Project.id,
+            Project.title,
+            Project.status,
+            func.coalesce(func.sum(Attendance.hours), 0.0),
+            func.max(ProjectSession.end),
+        )
+        .join(ProjectSession, ProjectSession.project_id == Project.id)
+        .join(Attendance, Attendance.session_id == ProjectSession.id)
+        .where(
+            Attendance.student_id == student_id,
+            Attendance.school_id == current_user.school_id,
+            Project.school_id == current_user.school_id,
+            ProjectSession.school_id == current_user.school_id,
+        )
+        .group_by(Project.id)
+        .order_by(Project.title)
+    ).all()
+
+    return StudentSummary(
+        id=student.id,
+        first_name=student.first_name,
+        last_name=student.last_name,
+        class_id=student.class_id,
+        class_year=classroom.year,
+        class_section=classroom.section,
+        pcto_required_hours=student.pcto_required_hours,
+        completed_hours_total=float(total_hours or 0.0),
+        by_project=[
+            StudentProjectSummary(
+                project_id=row[0],
+                title=row[1],
+                status=row[2],
+                completed_hours=float(row[3] or 0.0),
+                last_session_end=row[4],
+            )
+            for row in project_rows
+        ],
+    )
 
 
 @app.get("/v1/projects/{project_id}", response_model=Project)
@@ -347,6 +677,15 @@ def update_project(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="total_hours must be >= 0",
             )
+    if "class_id" in data:
+        classroom = session.exec(
+            select(ClassRoom).where(
+                ClassRoom.id == data["class_id"],
+                ClassRoom.school_id == current_user.school_id,
+            )
+        ).first()
+        if not classroom:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     for key, value in data.items():
         setattr(project, key, value)
     session.commit()

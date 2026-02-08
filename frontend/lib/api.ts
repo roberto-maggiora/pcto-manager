@@ -24,7 +24,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error("Unauthorized");
   }
   if (!response.ok) {
-    throw new Error(`API error ${response.status}`);
+    let message = `API error ${response.status}`;
+    try {
+      const data = (await response.json()) as { detail?: string };
+      if (data?.detail) {
+        message = data.detail;
+      }
+    } catch {
+      // ignore json parsing errors
+    }
+    throw new Error(message);
   }
   return (await response.json()) as T;
 }
@@ -42,6 +51,7 @@ export const api = {
       status: string;
       start_date: string;
       end_date: string;
+      class_id: string;
       description?: string | null;
       school_tutor_name?: string | null;
       provider_expert_name?: string | null;
@@ -55,6 +65,7 @@ export const api = {
         status: string;
         start_date: string;
         end_date: string;
+        class_id: string;
         total_hours?: number | null;
       }>
     >("/v1/projects"),
@@ -63,6 +74,7 @@ export const api = {
     status: string;
     start_date: string;
     end_date: string;
+    class_id: string;
     description?: string | null;
     school_tutor_name?: string | null;
     provider_expert_name?: string | null;
@@ -79,6 +91,7 @@ export const api = {
       status?: string;
       start_date?: string;
       end_date?: string;
+      class_id?: string;
       description?: string | null;
       school_tutor_name?: string | null;
       provider_expert_name?: string | null;
@@ -137,10 +150,59 @@ export const api = {
   getClasses: () => request<Array<{ id: string; year: number; section: string }>>("/v1/classes"),
   createClass: (payload: { year: number; section: string }) =>
     request("/v1/classes", { method: "POST", body: JSON.stringify(payload) }),
+  patchClass: (classId: string, payload: { year?: number; section?: string; name?: string }) =>
+    request(`/v1/classes/${classId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteClass: (classId: string) =>
+    request(`/v1/classes/${classId}`, { method: "DELETE" }),
   getStudents: (classId?: string) =>
-    request<Array<{ id: string; first_name: string; last_name: string; class_id: string }>>(
+    request<
+      Array<{
+        id: string;
+        first_name: string;
+        last_name: string;
+        class_id: string;
+        pcto_required_hours: number;
+      }>
+    >(
       `/v1/students${classId ? `?class_id=${classId}` : ""}`
     ),
-  createStudent: (payload: { class_id: string; first_name: string; last_name: string }) =>
-    request("/v1/students", { method: "POST", body: JSON.stringify(payload) })
+  createStudent: (payload: {
+    class_id: string;
+    first_name: string;
+    last_name: string;
+    pcto_required_hours?: number | null;
+  }) => request("/v1/students", { method: "POST", body: JSON.stringify(payload) }),
+  patchStudent: (
+    studentId: string,
+    payload: {
+      class_id?: string;
+      first_name?: string;
+      last_name?: string;
+      pcto_required_hours?: number | null;
+    }
+  ) => request(`/v1/students/${studentId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteStudent: (studentId: string) =>
+    request(`/v1/students/${studentId}`, { method: "DELETE" }),
+  getStudentMetrics: () =>
+    request<Array<{ student_id: string; completed_hours: number }>>(
+      "/v1/students/metrics"
+    ),
+  getStudentSummary: (studentId: string) =>
+    request<{
+      id: string;
+      first_name: string;
+      last_name: string;
+      class_id: string;
+      class_year: number;
+      class_section: string;
+      pcto_required_hours: number;
+      completed_hours_total: number;
+      by_project: Array<{
+        project_id: string;
+        title: string;
+        status: string;
+        completed_hours: number;
+        last_session_end: string | null;
+      }>;
+    }>(`/v1/students/${studentId}/summary`)
 };

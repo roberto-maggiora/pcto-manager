@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -18,10 +18,16 @@ export default function NewProjectPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [totalHours, setTotalHours] = useState("");
+  const [classId, setClassId] = useState("");
   const [description, setDescription] = useState("");
   const [schoolTutor, setSchoolTutor] = useState("");
   const [providerExpert, setProviderExpert] = useState("");
   const { toast } = useToast();
+
+  const classesQuery = useQuery({
+    queryKey: ["classes"],
+    queryFn: api.getClasses
+  });
 
   const createProject = useMutation({
     mutationFn: api.createProject,
@@ -60,6 +66,22 @@ export default function NewProjectPage() {
             <option value="draft">Bozza</option>
             <option value="active">Attivo</option>
             <option value="closed">Chiuso</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-sm font-medium">Classe</label>
+          <select
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+            value={classId}
+            onChange={(event) => setClassId(event.target.value)}
+          >
+            <option value="">Seleziona classe</option>
+            {(classesQuery.data ?? []).map((classItem) => (
+              <option key={classItem.id} value={classItem.id}>
+                {classItem.year}
+                {classItem.section}
+              </option>
+            ))}
           </select>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -113,13 +135,14 @@ export default function NewProjectPage() {
           />
         </div>
         <Button
-          disabled={createProject.isPending}
+          disabled={createProject.isPending || !classId}
           onClick={() =>
             createProject.mutate({
               title: title.trim(),
               status: status || "draft",
               start_date: startDate,
               end_date: endDate,
+              class_id: classId,
               description: description.trim() || null,
               school_tutor_name: schoolTutor.trim() || null,
               provider_expert_name: providerExpert.trim() || null,

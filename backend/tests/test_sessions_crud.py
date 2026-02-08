@@ -16,7 +16,7 @@ def _login(client, email: str, password: str) -> str:
     return response.json()["access_token"]
 
 
-def _create_project(client, token: str) -> str:
+def _create_project(client, token: str, class_id: str) -> str:
     response = client.post(
         "/v1/projects",
         json={
@@ -24,6 +24,7 @@ def _create_project(client, token: str) -> str:
             "status": "active",
             "start_date": "2026-02-01",
             "end_date": "2026-03-01",
+            "class_id": class_id,
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -37,7 +38,13 @@ def test_session_create_list_and_patch_topic(client):
         _, admin = create_school_with_admin(session, "A")
 
     token = _login(client, admin["email"], "admin123!")
-    project_id = _create_project(client, token)
+    class_resp = client.post(
+        "/v1/classes",
+        json={"year": 4, "section": "A"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert class_resp.status_code == 200
+    project_id = _create_project(client, token, class_resp.json()["id"])
 
     session_response = client.post(
         f"/v1/projects/{project_id}/sessions",
@@ -96,7 +103,13 @@ def test_session_delete_removes_attendance(client):
         student_id = student.id
 
     token = _login(client, admin["email"], "admin123!")
-    project_id = _create_project(client, token)
+    class_resp = client.post(
+        "/v1/classes",
+        json={"year": 4, "section": "A"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert class_resp.status_code == 200
+    project_id = _create_project(client, token, class_resp.json()["id"])
 
     session_response = client.post(
         f"/v1/projects/{project_id}/sessions",
@@ -152,7 +165,13 @@ def test_project_delete_removes_sessions_and_attendance(client):
         student_id = student.id
 
     token = _login(client, admin["email"], "admin123!")
-    project_id = _create_project(client, token)
+    class_resp = client.post(
+        "/v1/classes",
+        json={"year": 4, "section": "A"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert class_resp.status_code == 200
+    project_id = _create_project(client, token, class_resp.json()["id"])
 
     session_response = client.post(
         f"/v1/projects/{project_id}/sessions",
@@ -198,7 +217,13 @@ def test_session_patch_and_delete_cross_tenant_404(client):
 
     token_a = _login(client, admin_a["email"], "admin123!")
     token_b = _login(client, admin_b["email"], "admin123!")
-    project_id = _create_project(client, token_a)
+    class_resp = client.post(
+        "/v1/classes",
+        json={"year": 4, "section": "A"},
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert class_resp.status_code == 200
+    project_id = _create_project(client, token_a, class_resp.json()["id"])
 
     session_response = client.post(
         f"/v1/projects/{project_id}/sessions",

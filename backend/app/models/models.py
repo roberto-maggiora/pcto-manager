@@ -92,11 +92,13 @@ class Student(SQLModel, table=True):
     class_id: UUID = Field(foreign_key="classroom.id")
     first_name: str
     last_name: str
+    pcto_required_hours: int = 150
 
 
 class Project(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     school_id: UUID = Field(foreign_key="school.id")
+    class_id: UUID = Field(foreign_key="classroom.id")
     template_id: Optional[UUID] = None
     provider_id: Optional[UUID] = None
     title: str
